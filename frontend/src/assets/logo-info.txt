@@ -1,0 +1,11 @@
+This directory will contain the team's logo:
+
+- team-logo.png - The yellow mustang over a navy blue "M" logo.
+
+To use the logo in the application:
+1. Save the team logo image to this directory
+2. Import the logo in components like:
+   import teamLogo from '../assets/team-logo.png';
+
+The logo can be animated using GSAP or used in 3D elements with Three.js.
+Example GSAP animation will be added to the logo in the header component. 
