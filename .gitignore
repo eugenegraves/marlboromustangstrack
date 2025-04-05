@@ -46,4 +46,4 @@ Thumbs.db
 
 # Local development
 .eslintcache
-**/.eslintcache
+**/.eslintcachebackend/config/serviceAccountKey.json

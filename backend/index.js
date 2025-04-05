@@ -1,11 +1,17 @@
 const express = require('express');
 const cors = require('cors');
-// Firebase admin will be initialized here later
-// const admin = require('firebase-admin');
+const admin = require('firebase-admin');
 require('dotenv').config();
+
+// Initialize Firebase Admin
+const serviceAccount = require('./config/serviceAccountKey.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 // Import API routes
 const uploadRoutes = require('./api/upload');
+const athleteRoutes = require('./api/athletes');
 
 // Initialize express app
 const app = express();
@@ -22,6 +28,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/upload', uploadRoutes);
+app.use('/api/athletes', athleteRoutes);
 
 // Root route
 app.get('/', (req, res) => {

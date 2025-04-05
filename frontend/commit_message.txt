@@ -1,0 +1,7 @@
+Add roster management with athlete table and form
+Implemented backend API endpoints for athlete management
+Created Firestore security rules for athlete collection
+Added athlete service for frontend API integration
+Built roster page with Material-UI DataGrid and athlete form
+Added GSAP animations for table rows and dialog
+Styled components with team colors and track-inspired design
