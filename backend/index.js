@@ -12,6 +12,7 @@ admin.initializeApp({
 // Import API routes
 const uploadRoutes = require('./api/upload');
 const athleteRoutes = require('./api/athletes');
+const inventoryRoutes = require('./api/inventory');
 
 // Initialize express app
 const app = express();
@@ -29,6 +30,7 @@ app.use(express.json());
 // Routes
 app.use('/api/upload', uploadRoutes);
 app.use('/api/athletes', athleteRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Root route
 app.get('/', (req, res) => {
