@@ -32,6 +32,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckIcon from '@mui/icons-material/Check';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
+import { useAuth } from '../contexts/AuthContext';
 
 // Styled components
 const SummaryCard = styled(Card)(({ theme }) => ({
@@ -89,11 +90,11 @@ const AttentionItem = styled(Box)(({ theme }) => ({
  * Used on the dashboard to quickly show inventory statistics
  */
 const InventorySummary = () => {
+  const { currentUser } = useAuth();
   const [inventoryData, setInventoryData] = useState({
     items: [],
     loading: true,
-    error: null,
-    isAuthenticated: true
+    error: null
   });
   
   const [stats, setStats] = useState({
@@ -195,19 +196,7 @@ const InventorySummary = () => {
   
   const fetchInventoryData = async () => {
     try {
-      const user = auth.currentUser;
-      
-      if (!user) {
-        setInventoryData({
-          items: [],
-          loading: false,
-          error: null,
-          isAuthenticated: false
-        });
-        console.log('User not authenticated, showing empty inventory summary');
-        return;
-      }
-      
+      // Always assume user is authenticated since this component is only shown on dashboard
       const items = await getInventoryItems();
       const needsAttention = await getInventoryNeedingAttention();
       
@@ -226,8 +215,7 @@ const InventorySummary = () => {
       setInventoryData({
         items: [],
         loading: false,
-        error: 'Failed to load inventory data',
-        isAuthenticated: true
+        error: 'Failed to load inventory data'
       });
     }
   };
@@ -305,20 +293,8 @@ const InventorySummary = () => {
   if (inventoryData.loading) {
     return (
       <SummaryCard ref={cardRef}>
-        <CardContent sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CardContent sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
           <CircularProgress size={40} color="secondary" />
-        </CardContent>
-      </SummaryCard>
-    );
-  }
-  
-  if (!inventoryData.isAuthenticated) {
-    return (
-      <SummaryCard ref={cardRef}>
-        <CardContent>
-          <Typography variant="body1" color="text.secondary" align="center">
-            Sign in to view inventory summary
-          </Typography>
         </CardContent>
       </SummaryCard>
     );
