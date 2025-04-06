@@ -95,21 +95,25 @@ const RosterPage = () => {
     fetchAthletes();
   }, []);
   
-  // Fetch inventory items when athletes change
+  // Fetch inventory for athletes when athlete list changes
   useEffect(() => {
     const fetchInventoryItems = async () => {
-      try {
-        const inventoryData = {};
-        for (const athlete of athletes || []) {
+      if (athletes.length === 0) return;
+      
+      const inventoryData = {};
+      
+      for (const athlete of athletes) {
+        try {
           if (athlete.id) {
             const items = await getAthleteInventory(athlete.id);
             inventoryData[athlete.id] = items;
           }
+        } catch (error) {
+          console.error(`Error fetching inventory for athlete ${athlete.id}:`, error);
         }
-        setAthleteInventory(inventoryData);
-      } catch (error) {
-        console.error('Error fetching inventory items:', error);
       }
+      
+      setAthleteInventory(inventoryData);
     };
     
     fetchInventoryItems();

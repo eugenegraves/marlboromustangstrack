@@ -397,7 +397,7 @@ export const assignInventoryItem = async (itemId, athleteId) => {
 export const getAthleteInventory = async (athleteId) => {
   try {
     const items = await getInventoryItems();
-    return items.filter(item => item.athleteId === athleteId);
+    return items.filter(item => item.assignedTo === athleteId);
   } catch (error) {
     console.error(`Error fetching inventory for athlete ${athleteId}:`, error);
     throw error;
