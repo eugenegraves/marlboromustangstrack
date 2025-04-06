@@ -622,6 +622,11 @@ const RosterPage = () => {
           disableSelectionOnClick
           loading={loading}
           autoHeight
+          getRowHeight={({ id }) => {
+            const items = athleteInventory[id] || [];
+            // Base height plus additional height for each item
+            return Math.max(52, 52 + (items.length * 32));
+          }}
           components={{
             LoadingOverlay: () => (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
