@@ -1,6 +1,7 @@
 import axios from '../axios-config';
-import firebase from '../firebase';
 import { getAuth } from 'firebase/auth';
+import { collection, getDocs, doc, getDoc, deleteDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 // Helper function to transform inventory data from API response
 const transformInventoryItem = (item) => {
@@ -49,37 +50,63 @@ export const getInventoryItems = async () => {
     }
     
     try {
-      const idToken = await user.getIdToken();
+      // Access Firestore directly instead of going through API
+      const inventoryCollection = collection(db, 'inventory');
+      const snapshot = await getDocs(inventoryCollection);
       
-      const response = await axios.get('/api/inventory', {
-        headers: {
-          Authorization: `Bearer ${idToken}`
-        }
+      const inventoryItems = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        inventoryItems.push({
+          id: doc.id,
+          ...data,
+          // Ensure properly formatted dates
+          lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : new Date(),
+          addedDate: data.addedDate ? new Date(data.addedDate) : new Date()
+        });
       });
       
-      if (response.data && Array.isArray(response.data)) {
-        // Transform data and filter out any null items
-        const transformedItems = response.data
+      console.log('Inventory items fetched from Firestore:', inventoryItems);
+      
+      if (inventoryItems.length > 0) {
+        // Transform and return the real data
+        const transformedItems = inventoryItems
           .map(item => transformInventoryItem(item))
           .filter(item => item !== null);
         
-        console.log('Transformed inventory items from API:', transformedItems);
-        
-        if (transformedItems.length > 0) {
-          return transformedItems;
-        }
+        return transformedItems;
+      }
+      
+      // If no items found in Firestore, use mock data in development only
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('No inventory items found in Firestore, using mock data for development');
+        return getMockInventoryItems();
+      } else {
+        // In production, return empty array instead of mock data
+        console.log('No inventory items found in Firestore in production');
+        return [];
       }
     } catch (error) {
-      console.warn('API call failed, using mock data for development:', error);
+      console.error('Firestore access failed:', error);
+      
+      // Only use mock data in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Using mock data for development after error:', error.message);
+        return getMockInventoryItems();
+      } else {
+        console.error('Error fetching inventory in production:', error.message);
+        return [];
+      }
     }
-    
-    // Return mock data for development if API call fails or returns empty
-    console.log('Using mock inventory data for development');
-    return getMockInventoryItems();
   } catch (error) {
     console.error('Error fetching inventory items:', error);
-    // Return empty array instead of throwing error for better UI experience during development
-    return getMockInventoryItems();
+    
+    // Only use mock data in development
+    if (process.env.NODE_ENV !== 'production') {
+      return getMockInventoryItems();
+    } else {
+      return [];
+    }
   }
 };
 
@@ -186,19 +213,20 @@ export const getInventoryItemById = async (id) => {
       throw new Error('User not authenticated');
     }
     
-    const idToken = await user.getIdToken();
+    const docRef = doc(db, 'inventory', id);
+    const snapshot = await getDoc(docRef);
     
-    const response = await axios.get(`/api/inventory/${id}`, {
-      headers: {
-        Authorization: `Bearer ${idToken}`
-      }
-    });
-    
-    if (response.data) {
-      return transformInventoryItem(response.data);
+    if (!snapshot.exists()) {
+      throw new Error(`Inventory item with ID ${id} not found`);
     }
     
-    throw new Error('Inventory item not found');
+    const data = snapshot.data();
+    return transformInventoryItem({
+      id: snapshot.id,
+      ...data,
+      lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : new Date(),
+      addedDate: data.addedDate ? new Date(data.addedDate) : new Date()
+    });
   } catch (error) {
     console.error(`Error fetching inventory item with ID ${id}:`, error);
     throw error;
@@ -224,8 +252,6 @@ export const createInventoryItem = async (itemData) => {
       throw new Error('Item name is required');
     }
     
-    const idToken = await user.getIdToken();
-    
     // Ensure timestamps are properly set
     const newItem = {
       ...itemData,
@@ -233,18 +259,13 @@ export const createInventoryItem = async (itemData) => {
       lastUpdated: new Date().toISOString()
     };
     
-    const response = await axios.post('/api/inventory', newItem, {
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
+    const inventoryCollection = collection(db, 'inventory');
+    const docRef = await addDoc(inventoryCollection, newItem);
+    
+    return transformInventoryItem({
+      id: docRef.id,
+      ...newItem
     });
-    
-    if (response.data) {
-      return transformInventoryItem(response.data);
-    }
-    
-    throw new Error('Failed to create inventory item');
   } catch (error) {
     console.error('Error creating inventory item:', error);
     throw error;
@@ -266,26 +287,19 @@ export const updateInventoryItem = async (id, itemData) => {
       throw new Error('User not authenticated');
     }
     
-    const idToken = await user.getIdToken();
-    
-    // Update the lastUpdated timestamp
+    // Update the timestamp
     const updatedItem = {
       ...itemData,
       lastUpdated: new Date().toISOString()
     };
     
-    const response = await axios.put(`/api/inventory/${id}`, updatedItem, {
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
+    const itemRef = doc(db, 'inventory', id);
+    await updateDoc(itemRef, updatedItem);
+    
+    return transformInventoryItem({
+      id,
+      ...updatedItem
     });
-    
-    if (response.data) {
-      return transformInventoryItem(response.data);
-    }
-    
-    throw new Error('Failed to update inventory item');
   } catch (error) {
     console.error(`Error updating inventory item with ID ${id}:`, error);
     throw error;
@@ -295,7 +309,7 @@ export const updateInventoryItem = async (id, itemData) => {
 /**
  * Delete an inventory item
  * @param {string} id - The ID of the inventory item to delete
- * @returns {Promise<boolean>} True if the deletion was successful
+ * @returns {Promise<void>}
  */
 export const deleteInventoryItem = async (id) => {
   try {
@@ -306,15 +320,8 @@ export const deleteInventoryItem = async (id) => {
       throw new Error('User not authenticated');
     }
     
-    const idToken = await user.getIdToken();
-    
-    await axios.delete(`/api/inventory/${id}`, {
-      headers: {
-        Authorization: `Bearer ${idToken}`
-      }
-    });
-    
-    return true;
+    const itemRef = doc(db, 'inventory', id);
+    await deleteDoc(itemRef);
   } catch (error) {
     console.error(`Error deleting inventory item with ID ${id}:`, error);
     throw error;
@@ -336,20 +343,46 @@ export const assignInventoryItem = async (itemId, athleteId) => {
       throw new Error('User not authenticated');
     }
     
-    const idToken = await user.getIdToken();
+    // Get the current item
+    const itemRef = doc(db, 'inventory', itemId);
+    const itemSnapshot = await getDoc(itemRef);
     
-    const response = await axios.put(`/api/inventory/${itemId}/assign`, { athleteId }, {
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.data) {
-      return transformInventoryItem(response.data);
+    if (!itemSnapshot.exists()) {
+      throw new Error(`Inventory item with ID ${itemId} not found`);
     }
     
-    throw new Error('Failed to assign inventory item');
+    const updatedData = {
+      assignedTo: athleteId || null,
+      status: athleteId ? 'Checked Out' : 'Available',
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Update the item
+    await updateDoc(itemRef, updatedData);
+    
+    // If this is a uniform, update the athlete's 'Has Uniform?' field
+    if (athleteId && (itemSnapshot.data().category === 'Uniform' || itemSnapshot.data().type === 'Uniform')) {
+      const athleteRef = doc(db, 'athletes', athleteId);
+      await updateDoc(athleteRef, {
+        'Has Uniform?': true
+      });
+    }
+    
+    // If we're unassigning from a previous athlete
+    const previousAthleteId = itemSnapshot.data().assignedTo;
+    if (previousAthleteId && previousAthleteId !== athleteId && 
+        (itemSnapshot.data().category === 'Uniform' || itemSnapshot.data().type === 'Uniform')) {
+      const athleteRef = doc(db, 'athletes', previousAthleteId);
+      await updateDoc(athleteRef, {
+        'Has Uniform?': false
+      });
+    }
+    
+    return transformInventoryItem({
+      id: itemId,
+      ...itemSnapshot.data(),
+      ...updatedData
+    });
   } catch (error) {
     console.error(`Error assigning inventory item ${itemId} to athlete ${athleteId}:`, error);
     throw error;
