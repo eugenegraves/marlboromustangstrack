@@ -3,6 +3,7 @@ import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+import { Toaster } from 'react-hot-toast';
 
 // Layouts
 import DashboardLayout from './components/DashboardLayout';
@@ -97,6 +98,30 @@ function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Router>
+        
+        {/* Toast notifications */}
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: '#333',
+              color: '#fff',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              borderRadius: '8px',
+              padding: '12px 20px',
+            },
+            success: {
+              style: {
+                background: '#1a237e',
+                color: '#fff',
+              },
+              iconTheme: {
+                primary: '#ffc107',
+                secondary: '#1a237e',
+              },
+            },
+          }}
+        />
       </AuthProvider>
     </ThemeProvider>
   );
