@@ -19,7 +19,10 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider
+  Divider,
+  FormControlLabel,
+  Switch,
+  Chip
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
 import EditIcon from '@mui/icons-material/Edit';
@@ -75,6 +78,9 @@ const RosterPage = () => {
   const [eventsLoading, setEventsLoading] = useState({});
   const [eventsError, setEventsError] = useState({});
   const [expandedGroup, setExpandedGroup] = useState(false);
+  
+  // Add a state to control showing past events
+  const [showPastEvents, setShowPastEvents] = useState(false);
   
   const tableRef = useRef(null);
   const dialogRef = useRef(null);
@@ -140,7 +146,17 @@ const RosterPage = () => {
   useEffect(() => {
     if (expandedGroup && accordionRefs.current[expandedGroup]) {
       // Get all list items within the expanded accordion
-      const listItems = accordionRefs.current[expandedGroup].querySelectorAll('.event-list-item');
+      const accordionEl = accordionRefs.current[expandedGroup];
+      if (!accordionEl) {
+        console.warn(`No accordion reference found for group: ${expandedGroup}`);
+        return;
+      }
+      
+      const listItems = accordionEl.querySelectorAll('.event-list-item');
+      if (listItems.length === 0) {
+        console.log(`No event list items found for group: ${expandedGroup}`);
+        return;
+      }
       
       // Animate list items with stagger effect
       gsap.fromTo(
@@ -159,43 +175,154 @@ const RosterPage = () => {
   
   // Fetch events for a specific group
   const fetchEventsForGroup = async (group) => {
+    if (!group) {
+      console.warn('Attempted to fetch events for undefined or empty group');
+      return;
+    }
+    
     setEventsLoading(prev => ({ ...prev, [group]: true }));
     setEventsError(prev => ({ ...prev, [group]: null }));
     
     try {
-      console.log(`Fetching events for group: ${group}`);
+      console.log(`Fetching events for group: "${group}"`);
       const events = await getEvents(group);
+      console.log(`Received ${events.length} events for group "${group}"`);
       
-      // Sort events by date (most recent first)
-      const sortedEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date));
+      if (events.length > 0) {
+        // Check the structure of the first event to help debug
+        const firstEvent = events[0];
+        console.log('First event structure:', {
+          id: firstEvent.id,
+          title: firstEvent.title,
+          date: firstEvent.date,
+          dateType: typeof firstEvent.date,
+          isDate: firstEvent.date instanceof Date,
+          dateToString: firstEvent.date?.toString?.() || 'N/A',
+          dateTime: firstEvent.date?.getTime?.() || 'N/A',
+          group: firstEvent.group,
+          displayGroups: firstEvent.displayGroups
+        });
+      }
       
-      // Only include upcoming events (today or later)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set to beginning of today
-      
-      const upcomingEvents = sortedEvents.filter(event => {
-        const eventDate = new Date(event.date);
-        return eventDate >= today;
+      // Fix any date issues before sorting
+      const eventsWithFixedDates = events.map(event => {
+        if (!(event.date instanceof Date) || isNaN(event.date.getTime())) {
+          console.warn(`Event ${event.id} has invalid date:`, event.date);
+          // Try to fix it
+          if (typeof event.date === 'object' && event.date?.seconds) {
+            event.date = new Date(event.date.seconds * 1000);
+          } else if (typeof event.date === 'string' || typeof event.date === 'number') {
+            event.date = new Date(event.date);
+          } else {
+            // Fallback - use current date
+            event.date = new Date();
+          }
+        }
+        return event;
       });
       
-      setGroupEvents(prev => ({ ...prev, [group]: upcomingEvents }));
+      // Sort events by date (closest date first)
+      const sortedEvents = eventsWithFixedDates.sort((a, b) => a.date - b.date);
+      
+      // Calculate today's date for filtering upcoming events
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to beginning of today
+      console.log('Today\'s date for filtering:', today.toString(), today.getTime());
+      
+      // Filter for upcoming events
+      const upcomingEvents = sortedEvents.filter(event => {
+        // Force event.date to be a Date object
+        const eventDate = new Date(event.date);
+        // Log detailed info for debugging
+        console.log(`Event "${event.title}":`, {
+          rawDate: event.date,
+          dateObj: eventDate,
+          dateTime: eventDate.getTime(),
+          todayTime: today.getTime(),
+          isUpcoming: eventDate.getTime() >= today.getTime(),
+          difference: eventDate.getTime() - today.getTime()
+        });
+        return eventDate.getTime() >= today.getTime();
+      });
+      
+      console.log(`Found ${upcomingEvents.length} upcoming events out of ${sortedEvents.length} total events for group "${group}"`);
+      
+      // Set the events to display based on the showPastEvents state
+      const displayEvents = showPastEvents ? sortedEvents : upcomingEvents;
+      
+      console.log(`Using ${displayEvents.length} events for display (showPastEvents: ${showPastEvents})`);
+      setGroupEvents(prev => ({ ...prev, [group]: displayEvents }));
     } catch (error) {
-      console.error(`Error fetching events for group ${group}:`, error);
-      setEventsError(prev => ({ ...prev, [group]: 'Failed to load events for this group' }));
+      console.error(`Error fetching events for group "${group}":`, error);
+      setEventsError(prev => ({ 
+        ...prev, 
+        [group]: `Failed to load events for this group: ${error.message}` 
+      }));
     } finally {
       setEventsLoading(prev => ({ ...prev, [group]: false }));
     }
   };
   
-  // Handle accordion expansion change
+  // Debug function to show events data structure
+  const debugEventsData = (group) => {
+    console.log(`=== DEBUG EVENTS FOR "${group}" ===`);
+    console.log('Events loading state:', eventsLoading[group]);
+    console.log('Events error state:', eventsError[group]);
+    console.log('Events data:', groupEvents[group]);
+    if (groupEvents[group]) {
+      const firstEvent = groupEvents[group][0];
+      if (firstEvent) {
+        console.log('First event structure:', {
+          id: firstEvent.id,
+          title: firstEvent.title,
+          date: firstEvent.date,
+          group: firstEvent.group,
+          displayGroups: firstEvent.displayGroups
+        });
+      }
+    }
+    console.log('==============================');
+  };
+  
+  // Enhanced handleAccordionChange with debugging
   const handleAccordionChange = (group) => (event, isExpanded) => {
+    if (isExpanded) {
+      // Debug when expanding
+      debugEventsData(group);
+      
+      // If we have an error or no events yet, retry fetching
+      if (eventsError[group] || !groupEvents[group]) {
+        console.log(`Retrying fetch for group "${group}" on expand`);
+        fetchEventsForGroup(group);
+      }
+    }
+    
     setExpandedGroup(isExpanded ? group : false);
   };
   
   // Format date for display
-  const formatEventDate = (dateString) => {
-    const date = new Date(dateString);
-    return format(date, "MMM dd, yyyy, h:mm a");
+  const formatEventDate = (dateInput) => {
+    try {
+      // If it's already a Date object, use it directly
+      let date;
+      
+      if (dateInput instanceof Date) {
+        date = dateInput;
+      } else {
+        date = new Date(dateInput);
+      }
+      
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date:', dateInput);
+        return 'Invalid date';
+      }
+      
+      const formattedDate = format(date, "MMM dd, yyyy, h:mm a");
+      return formattedDate;
+    } catch (error) {
+      console.error('Error formatting date:', dateInput, error);
+      return String(dateInput);
+    }
   };
   
   // Fetch athletes from API
@@ -335,6 +462,22 @@ const RosterPage = () => {
     }
   ];
   
+  // Update events display when showPastEvents changes
+  useEffect(() => {
+    if (expandedGroup) {
+      // Just refetch the current expanded group when the filter changes
+      fetchEventsForGroup(expandedGroup);
+    }
+  }, [showPastEvents, expandedGroup]);
+  
+  // Add a visual indicator for past events in the list item
+  const isPastEvent = (date) => {
+    const eventDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return eventDate < today;
+  };
+  
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -470,17 +613,75 @@ const RosterPage = () => {
                     }
                   }}
                 >
-                  <Typography fontWeight="medium" color="primary">
-                    {group} ({athletes.filter(a => a.group === group).length} athletes)
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <Typography fontWeight="medium" color="primary">
+                      {group} ({athletes.filter(a => a.group === group).length} athletes)
+                    </Typography>
+                    <Box>
+                      {!eventsLoading[group] && (
+                        <Typography variant="body2" color="text.secondary" component="span" sx={{ mr: 2 }}>
+                          {groupEvents[group] ? 
+                            `${groupEvents[group].filter(event => {
+                              const eventDate = new Date(event.date);
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              return eventDate >= today;
+                            }).length} upcoming` : 
+                            'No events'}
+                        </Typography>
+                      )}
+                      <FormControlLabel
+                        control={
+                          <Switch 
+                            size="small"
+                            checked={showPastEvents}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setShowPastEvents(e.target.checked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        }
+                        label={<Typography variant="body2">Show Past</Typography>}
+                        sx={{ mr: 1 }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Button 
+                        size="small" 
+                        startIcon={<EventIcon fontSize="small" />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetchEventsForGroup(group);
+                        }}
+                        sx={{ ml: 1 }}
+                      >
+                        Reload
+                      </Button>
+                    </Box>
+                  </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   {eventsLoading[group] ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', my: 2 }}>
                       <CircularProgress color="secondary" size={24} />
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Loading events...
+                      </Typography>
                     </Box>
                   ) : eventsError[group] ? (
-                    <Alert severity="error" sx={{ mt: 1 }}>
+                    <Alert 
+                      severity="error" 
+                      sx={{ mt: 1 }}
+                      action={
+                        <Button 
+                          color="inherit" 
+                          size="small"
+                          onClick={() => fetchEventsForGroup(group)}
+                        >
+                          Retry
+                        </Button>
+                      }
+                    >
                       {eventsError[group]}
                     </Alert>
                   ) : (
@@ -496,19 +697,40 @@ const RosterPage = () => {
                                   transition: 'background-color 0.2s',
                                   '&:hover': {
                                     backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                                  }
+                                  },
+                                  // Add a background color based on whether the event is upcoming or past
+                                  bgcolor: (theme) => 
+                                    isPastEvent(event.date) 
+                                      ? 'rgba(244, 67, 54, 0.08)' 
+                                      : 'rgba(76, 175, 80, 0.08)'
                                 }}
                               >
                                 <ListItemText
                                   primary={
-                                    <Typography fontWeight="medium" color="primary.main">
-                                      {event.type}: {event.title}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Typography fontWeight="medium" color="primary.main">
+                                        {event.type}: {event.title}
+                                      </Typography>
+                                      {isPastEvent(event.date) && (
+                                        <Chip size="small" label="Past" color="error" 
+                                          variant="outlined" sx={{ ml: 1, height: 20 }} />
+                                      )}
+                                    </Box>
                                   }
                                   secondary={
-                                    <Typography variant="body2" color="text.secondary">
-                                      {formatEventDate(event.date)}
-                                    </Typography>
+                                    <>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Date: {formatEventDate(event.date)}
+                                      </Typography>
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                        Raw Date: {event.date?.toString() || 'N/A'}
+                                      </Typography>
+                                      {event.displayGroups && (
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                          Groups: {event.displayGroups.join(', ')}
+                                        </Typography>
+                                      )}
+                                    </>
                                   }
                                 />
                               </ListItem>
