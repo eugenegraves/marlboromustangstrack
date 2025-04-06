@@ -428,13 +428,29 @@ const RosterPage = () => {
   
   // DataGrid columns configuration
   const columns = [
-    { field: 'name', headerName: 'Name', flex: 1, minWidth: 150 },
-    { field: 'group', headerName: 'Group', flex: 1, minWidth: 150 },
+    { 
+      field: 'name', 
+      headerName: 'ATHLETE NAME', 
+      flex: 1, 
+      minWidth: 150,
+      headerAlign: 'left',
+      headerClassName: 'super-app-theme--header'
+    },
+    { 
+      field: 'group', 
+      headerName: 'TRAINING GROUP', 
+      flex: 1, 
+      minWidth: 150,
+      headerAlign: 'left',
+      headerClassName: 'super-app-theme--header'
+    },
     { 
       field: 'uniformID', 
-      headerName: 'Uniform ID', 
+      headerName: 'UNIFORM ID', 
       flex: 0.7, 
       minWidth: 120,
+      headerAlign: 'left',
+      headerClassName: 'super-app-theme--header',
       renderCell: (params) => {
         console.log('Uniform cell params:', params);
         return <span>{params.row.uniformID || 'None'}</span>;
@@ -443,8 +459,10 @@ const RosterPage = () => {
     {
       field: 'actions',
       type: 'actions',
-      headerName: 'Actions',
+      headerName: 'ACTIONS',
       width: 100,
+      headerAlign: 'center',
+      headerClassName: 'super-app-theme--header',
       getActions: (params) => [
         <GridActionsCellItem
           icon={<EditIcon />}
@@ -550,8 +568,20 @@ const RosterPage = () => {
           sx={{
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: 'primary.main',
-              color: 'white',
+              color: 'secondary.main',
               fontWeight: 'bold'
+            },
+            '& .super-app-theme--header': {
+              fontSize: '0.875rem',
+              letterSpacing: '0.5px',
+              color: 'secondary.main'
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontWeight: 'bold',
+              fontSize: '0.875rem'
+            },
+            '& .MuiDataGrid-columnHeader': {
+              padding: '0 16px'
             },
             '& .MuiDataGrid-row:hover': {
               backgroundColor: 'rgba(255, 193, 7, 0.1)',
