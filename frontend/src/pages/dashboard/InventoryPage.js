@@ -84,7 +84,7 @@ export default function InventoryPage() {
   const [itemData, setItemData] = useState({
     name: '',
     itemId: '',
-    type: 'Uniform',
+    type: 'Singlet',
     category: 'Uniform',
     status: 'Available',
     size: '',
@@ -213,7 +213,7 @@ export default function InventoryPage() {
       setItemData({
         name: item.name || '',
         itemId: item.itemId || '',
-        type: item.type || 'Uniform',
+        type: item.type || 'Singlet',
         category: item.category || 'Uniform',
         status: item.status || 'Available',
         size: item.size || '',
@@ -230,7 +230,7 @@ export default function InventoryPage() {
       setItemData({
         name: '',
         itemId: '',
-        type: 'Uniform',
+        type: 'Singlet',
         category: 'Uniform',
         status: 'Available',
         size: '',
@@ -483,7 +483,7 @@ export default function InventoryPage() {
       console.log('Item updated in Firestore:', firestoreData);
 
       // Next, if this is a uniform category item, update the athlete's 'Has Uniform?' field
-      if (selectedItem.category === 'Uniform' || selectedItem.type === 'Uniform') {
+      if (selectedItem.category === 'Uniform' || selectedItem.type === 'Singlet' || selectedItem.type === 'Shorts') {
         // If we're assigning a uniform to an athlete
         if (itemData.assignedTo) {
           // Update the athlete record to indicate they have a uniform
@@ -829,7 +829,8 @@ export default function InventoryPage() {
                     onChange={handleInputChange}
                     label="Type"
                   >
-                    <MenuItem value="Uniform">Uniform</MenuItem>
+                    <MenuItem value="Singlet">Singlet</MenuItem>
+                    <MenuItem value="Shorts">Shorts</MenuItem>
                     <MenuItem value="Footwear">Footwear</MenuItem>
                     <MenuItem value="Field Equipment">Field Equipment</MenuItem>
                     <MenuItem value="Track Equipment">Track Equipment</MenuItem>
