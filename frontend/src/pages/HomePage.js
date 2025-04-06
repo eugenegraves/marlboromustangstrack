@@ -118,64 +118,22 @@ const HomePage = () => {
               Go to Dashboard
             </Button>
           ) : (
-            <>
-              <Button 
-                component={Link} 
-                to="/login" 
-                variant="contained" 
-                color="secondary"
-                size="large"
-                sx={{ 
-                  fontWeight: 'bold',
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2
-                }}
-              >
-                Coach Login
-              </Button>
-              
-              <Button 
-                component={Link} 
-                to="/register" 
-                variant="outlined" 
-                color="secondary"
-                size="large"
-                sx={{ 
-                  fontWeight: 'bold',
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2,
-                  borderWidth: 2,
-                  '&:hover': {
-                    borderWidth: 2
-                  }
-                }}
-              >
-                Register
-              </Button>
-            </>
+            <Button 
+              component={Link} 
+              to="/login" 
+              variant="contained" 
+              color="secondary"
+              size="large"
+              sx={{ 
+                fontWeight: 'bold',
+                px: 4,
+                py: 1.5,
+                borderRadius: 2
+              }}
+            >
+              Coach Login
+            </Button>
           )}
-          
-          <Button 
-            component={Link} 
-            to="/upload-demo" 
-            variant="outlined" 
-            color="secondary"
-            size="large"
-            sx={{ 
-              fontWeight: 'bold',
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              borderWidth: 2,
-              '&:hover': {
-                borderWidth: 2
-              }
-            }}
-          >
-            Try Upload Demo
-          </Button>
         </Stack>
       </Container>
     </Box>
