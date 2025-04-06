@@ -439,7 +439,7 @@ export default function InventoryPage() {
 
       console.log('Updated item data for assignment:', updatedItemData);
 
-      // Find athlete name for logging
+      // Find athlete for logging and updates
       const selectedAthlete = athletes.find(a => a.id === itemData.assignedTo);
       console.log('Selected athlete:', selectedAthlete);
       
@@ -451,7 +451,7 @@ export default function InventoryPage() {
         console.log('Unassigning item (making available)');
       }
 
-      // Update the item in Firestore
+      // First, update the inventory item in Firestore
       const itemRef = doc(db, 'inventory', selectedItem.id);
       
       // Only save essential fields to Firestore
@@ -462,6 +462,31 @@ export default function InventoryPage() {
       
       await updateDoc(itemRef, firestoreData);
       console.log('Item updated in Firestore:', firestoreData);
+
+      // Next, if this is a uniform category item, update the athlete's 'Has Uniform?' field
+      if (selectedItem.category === 'Uniform' || selectedItem.type === 'Uniform') {
+        // If we're assigning a uniform to an athlete
+        if (itemData.assignedTo) {
+          // Update the athlete record to indicate they have a uniform
+          const athleteRef = doc(db, 'athletes', itemData.assignedTo);
+          await updateDoc(athleteRef, {
+            'Has Uniform?': true
+          });
+          console.log(`Updated athlete ${itemData.assignedTo} to show they have a uniform`);
+        }
+        
+        // If we're un-assigning a uniform from an athlete
+        if (selectedItem.assignedTo && !itemData.assignedTo) {
+          // Check if the athlete had this uniform assigned
+          const athleteRef = doc(db, 'athletes', selectedItem.assignedTo);
+          
+          // Update the athlete record to indicate they no longer have a uniform
+          await updateDoc(athleteRef, {
+            'Has Uniform?': false
+          });
+          console.log(`Updated athlete ${selectedItem.assignedTo} to show they no longer have a uniform`);
+        }
+      }
 
       // Update the item in the UI state
       setItems(items.map(item => 
