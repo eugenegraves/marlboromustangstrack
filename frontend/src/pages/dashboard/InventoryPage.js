@@ -87,6 +87,10 @@ export default function InventoryPage() {
     type: 'Uniform',
     category: 'Uniform',
     status: 'Available',
+    size: '',
+    condition: 'Good',
+    location: '',
+    notes: '',
     assignedTo: '',
     athleteId: null,
     athleteName: ''
@@ -199,36 +203,47 @@ export default function InventoryPage() {
     }
   };
   
-  // Handle opening the add/edit item dialog
+  // Handle opening the item dialog
   const handleOpenItemDialog = (item = null) => {
+    // If we're editing an existing item
     if (item) {
-      // Editing an existing item
-      setItemData({
-        name: item.name || item.itemId || '',
-        itemId: item.itemId || item.name || '',
-        type: item.type || '',
-        category: item.category || item.type || 'Uniform',
-        status: item.status || 'Available',
-        assignedTo: item.assignedTo || item.athleteId || '',
-        athleteId: item.athleteId || item.assignedTo || null,
-        athleteName: item.athleteName || item.assignedToName || ''
-      });
       setSelectedItem(item);
+      
+      // Populate form with item data
+      setItemData({
+        name: item.name || '',
+        itemId: item.itemId || '',
+        type: item.type || 'Uniform',
+        category: item.category || 'Uniform',
+        status: item.status || 'Available',
+        size: item.size || '',
+        condition: item.condition || 'Good',
+        location: item.location || '',
+        notes: item.notes || '',
+        assignedTo: item.assignedTo || '',
+        athleteId: item.assignedTo || null,
+        athleteName: item.athleteName || ''
+      });
     } else {
-      // Adding a new item
+      // Reset for new item
+      setSelectedItem(null);
       setItemData({
         name: '',
         itemId: '',
         type: 'Uniform',
         category: 'Uniform',
         status: 'Available',
+        size: '',
+        condition: 'Good',
+        location: '',
+        notes: '',
         assignedTo: '',
         athleteId: null,
         athleteName: ''
       });
-      setSelectedItem(null);
     }
     
+    // Open the dialog
     setOpenItemDialog(true);
   };
   
@@ -329,15 +344,19 @@ export default function InventoryPage() {
         itemId: itemData.itemId || `ITEM-${Math.floor(Math.random() * 10000)}`,
         type: itemData.type,
         category: itemData.category,
+        size: itemData.size || '',
+        condition: itemData.condition || 'Good',
+        location: itemData.location || '',
+        notes: itemData.notes || '',
         status: itemData.status,
-        assignedTo: itemData.assignedTo || null
+        assignedTo: itemData.assignedTo || null,
+        lastUpdated: new Date().toISOString()
       };
       
-      // Add optional fields if they exist
-      if (itemData.size) firestoreData.size = itemData.size;
-      if (itemData.condition) firestoreData.condition = itemData.condition;
-      if (itemData.location) firestoreData.location = itemData.location;
-      if (itemData.notes) firestoreData.notes = itemData.notes;
+      // Set creation date for new items
+      if (!selectedItem) {
+        firestoreData.addedDate = new Date().toISOString();
+      }
       
       console.log('Saving item data:', firestoreData);
       
@@ -753,7 +772,7 @@ export default function InventoryPage() {
       <Dialog 
         open={openItemDialog} 
         onClose={() => setOpenItemDialog(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>
@@ -761,66 +780,120 @@ export default function InventoryPage() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
-            <TextField
-              fullWidth
-              label="Item Name"
-              name="name"
-              value={itemData.name}
-              onChange={handleInputChange}
-              required
-              placeholder="e.g. Track Jersey #10"
-            />
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Item Name"
+                  name="name"
+                  value={itemData.name}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="e.g. Track Jersey #10"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Item ID"
+                  name="itemId"
+                  value={itemData.itemId}
+                  onChange={handleInputChange}
+                  placeholder="e.g. U-1001"
+                />
+              </Grid>
+            </Grid>
             
-            <TextField
-              fullWidth
-              label="Item ID"
-              name="itemId"
-              value={itemData.itemId}
-              onChange={handleInputChange}
-              placeholder="e.g. U-1001"
-            />
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    name="category"
+                    value={itemData.category}
+                    onChange={handleInputChange}
+                    label="Category"
+                  >
+                    {categoryOptions.map(option => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    name="type"
+                    value={itemData.type}
+                    onChange={handleInputChange}
+                    label="Type"
+                  >
+                    <MenuItem value="Uniform">Uniform</MenuItem>
+                    <MenuItem value="Footwear">Footwear</MenuItem>
+                    <MenuItem value="Field Equipment">Field Equipment</MenuItem>
+                    <MenuItem value="Track Equipment">Track Equipment</MenuItem>
+                    <MenuItem value="Accessory">Accessory</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
             
-            <FormControl fullWidth required>
-              <InputLabel>Category</InputLabel>
-              <Select
-                name="category"
-                value={itemData.category}
-                onChange={handleInputChange}
-                label="Category"
-              >
-                {categoryOptions.map(option => (
-                  <MenuItem key={option} value={option}>{option}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    name="status"
+                    value={itemData.status}
+                    onChange={handleInputChange}
+                    label="Status"
+                  >
+                    {statusOptions.map(option => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Size"
+                  name="size"
+                  value={itemData.size || ''}
+                  onChange={handleInputChange}
+                  placeholder="e.g. M, L, 10, 42"
+                />
+              </Grid>
+            </Grid>
             
-            <FormControl fullWidth required>
-              <InputLabel>Type</InputLabel>
-              <Select
-                name="type"
-                value={itemData.type}
-                onChange={handleInputChange}
-                label="Type"
-              >
-                <MenuItem value="Uniform">Uniform</MenuItem>
-                <MenuItem value="Equipment">Equipment</MenuItem>
-                <MenuItem value="Accessory">Accessory</MenuItem>
-              </Select>
-            </FormControl>
-            
-            <FormControl fullWidth required>
-              <InputLabel>Status</InputLabel>
-              <Select
-                name="status"
-                value={itemData.status}
-                onChange={handleInputChange}
-                label="Status"
-              >
-                {statusOptions.map(option => (
-                  <MenuItem key={option} value={option}>{option}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Condition</InputLabel>
+                  <Select
+                    name="condition"
+                    value={itemData.condition || 'Good'}
+                    onChange={handleInputChange}
+                    label="Condition"
+                  >
+                    {conditionOptions.map(option => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Location"
+                  name="location"
+                  value={itemData.location || ''}
+                  onChange={handleInputChange}
+                  placeholder="e.g. Equipment Room, Storage"
+                />
+              </Grid>
+            </Grid>
             
             {itemData.status === 'Checked Out' && (
               <FormControl fullWidth required>
@@ -842,6 +915,17 @@ export default function InventoryPage() {
                 </Select>
               </FormControl>
             )}
+            
+            <TextField
+              fullWidth
+              label="Notes"
+              name="notes"
+              value={itemData.notes || ''}
+              onChange={handleInputChange}
+              multiline
+              rows={3}
+              placeholder="Additional information about this item..."
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
