@@ -17,7 +17,13 @@ import {
   Select,
   Stack,
   TextField,
-  Typography
+  Typography,
+  Paper,
+  CircularProgress,
+  IconButton,
+  Alert,
+  Snackbar,
+  Autocomplete
 } from '@mui/material';
 import {
   DataGrid,
@@ -28,7 +34,8 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  AssignmentInd as AssignmentIndIcon
+  AssignmentInd as AssignmentIndIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { gsap } from 'gsap';
 import { toast } from 'react-hot-toast';
@@ -40,6 +47,25 @@ import {
   assignInventoryItem
 } from '../../services/inventoryService';
 import { getAthletes } from '../../services/athleteService';
+import { format } from 'date-fns';
+import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+
+// Status options for inventory items
+const statusOptions = ['Available', 'Checked Out', 'Maintenance', 'Retired'];
+
+// Condition options for inventory items
+const conditionOptions = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged'];
+
+// Category options for equipment
+const categoryOptions = [
+  'Uniform',
+  'Shoes',
+  'Accessories',
+  'Training Equipment',
+  'Competition Equipment',
+  'Other'
+];
 
 export default function InventoryPage() {
   // State variables
@@ -51,18 +77,57 @@ export default function InventoryPage() {
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [athletes, setAthletes] = useState([]);
+  const [athletesLoading, setAthletesLoading] = useState(true);
+  const [athletesError, setAthletesError] = useState(null);
   
   // New item form state
   const [itemData, setItemData] = useState({
+    name: '',
     itemId: '',
     type: 'Uniform',
+    category: 'Uniform',
     status: 'Available',
-    assignedTo: ''
+    assignedTo: '',
+    athleteId: null,
+    athleteName: ''
   });
   
-  // References for animations
+  // State for the DataGrid
+  const [pageSize, setPageSize] = useState(10);
+  const [selectionModel, setSelectionModel] = useState([]);
+  
+  // State for snackbar
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+  
+  // Refs for animation
   const titleRef = useRef(null);
   const gridRef = useRef(null);
+  const dialogRef = useRef(null);
+  
+  // Add this function before the useEffect hook
+  const transformInventoryData = (items) => {
+    return items.map(item => {
+      // Ensure each item has an ID
+      const id = item.id || Math.random().toString(36).substring(2, 11);
+      
+      // Now we know assignedTo is the key field used in Firestore
+      // We don't need to set athleteName/assignedToName at this level
+      // since we'll handle this in the renderCell function
+      
+      return {
+        ...item,
+        id,
+        // Map itemId to name if name is missing
+        name: item.name || item.itemId || '',
+        // Ensure we have the assignedTo field (the athlete ID)
+        assignedTo: item.assignedTo || null
+      };
+    });
+  };
   
   // Fetch inventory items and athletes when component mounts
   useEffect(() => {
@@ -71,13 +136,32 @@ export default function InventoryPage() {
         setLoading(true);
         setError(null);
         
+        // Get athletes for assignee dropdown first (needed for name lookups)
+        const athleteList = await getAthletes();
+        console.log('===== ATHLETE DATA DEBUG =====');
+        console.log('Athletes count:', athleteList.length);
+        console.log('First athlete:', athleteList[0]);
+        console.log('First athlete keys:', athleteList[0] ? Object.keys(athleteList[0]) : 'No athletes');
+        console.log('Athletes IDs:', athleteList.map(a => a.id));
+        console.log('Athletes Names:', athleteList.map(a => a.name));
+        console.log('Athletes FirstName/LastName:', athleteList.map(a => ({ 
+          id: a.id, 
+          firstName: a.firstName, 
+          lastName: a.lastName 
+        })));
+        console.log('Athlete data structure check - FULL:', athleteList.slice(0, 3));
+        
+        setAthletes(athleteList);
+        
         // Get inventory items
         const inventoryItems = await getInventoryItems();
-        setItems(inventoryItems);
+        console.log('Inventory items received:', inventoryItems);
         
-        // Get athletes for assignee dropdown
-        const athleteList = await getAthletes();
-        setAthletes(athleteList);
+        // Transform items to ensure consistent structure
+        const transformedItems = transformInventoryData(inventoryItems);
+        console.log('Transformed items:', transformedItems);
+        
+        setItems(transformedItems);
         
         // Run animations after data is loaded
         runEntranceAnimations();
@@ -120,19 +204,27 @@ export default function InventoryPage() {
     if (item) {
       // Editing an existing item
       setItemData({
-        itemId: item.itemId,
-        type: item.type,
-        status: item.status,
-        assignedTo: item.assignedTo || ''
+        name: item.name || item.itemId || '',
+        itemId: item.itemId || item.name || '',
+        type: item.type || '',
+        category: item.category || item.type || 'Uniform',
+        status: item.status || 'Available',
+        assignedTo: item.assignedTo || item.athleteId || '',
+        athleteId: item.athleteId || item.assignedTo || null,
+        athleteName: item.athleteName || item.assignedToName || ''
       });
       setSelectedItem(item);
     } else {
       // Adding a new item
       setItemData({
+        name: '',
         itemId: '',
         type: 'Uniform',
+        category: 'Uniform',
         status: 'Available',
-        assignedTo: ''
+        assignedTo: '',
+        athleteId: null,
+        athleteName: ''
       });
       setSelectedItem(null);
     }
@@ -159,51 +251,154 @@ export default function InventoryPage() {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setItemData({
-      ...itemData,
-      [name]: value
-    });
     
-    // If status is not "Checked Out", clear assignedTo
-    if (name === 'status' && value !== 'Checked Out') {
+    if (name === 'status') {
+      if (value !== 'Checked Out') {
+        // If status is not "Checked Out", clear athlete assignment fields
+        setItemData(prev => ({
+          ...prev,
+          [name]: value,
+          assignedTo: '',
+          athleteId: null,
+          athleteName: ''
+        }));
+      } else {
+        // Just update the status
+        setItemData(prev => ({
+          ...prev,
+          [name]: value
+        }));
+      }
+    } else if (name === 'assignedTo') {
+      // When assignedTo changes, update athleteId and potentially athleteName
+      const selectedAthlete = athletes.find(a => a.id === value);
+      
+      if (selectedAthlete) {
+        setItemData(prev => ({
+          ...prev,
+          assignedTo: value,
+          athleteId: value,
+          athleteName: `${selectedAthlete['First Name']} ${selectedAthlete['Last Name']}`
+        }));
+      } else {
+        // No athlete selected
+        setItemData(prev => ({
+          ...prev,
+          assignedTo: value,
+          athleteId: value || null,
+          athleteName: ''
+        }));
+      }
+    } else {
+      // For all other fields, just update normally
       setItemData(prev => ({
         ...prev,
-        assignedTo: ''
+        [name]: value
       }));
     }
   };
   
-  // Handle saving an inventory item (create or update)
+  // Handle saving a new or updated item
   const handleSaveItem = async () => {
     try {
-      if (selectedItem) {
-        // Update existing item
-        await updateInventoryItem(selectedItem.id, itemData);
-        toast.success('Item updated successfully');
-      } else {
-        // Create new item
-        await createInventoryItem(itemData);
-        toast.success('Item added successfully');
+      setLoading(true);
+      
+      // Validate required fields
+      if (!itemData.name || !itemData.type || !itemData.category || !itemData.status) {
+        setSnackbar({
+          open: true,
+          message: 'Please fill in all required fields',
+          severity: 'error'
+        });
+        return;
       }
       
-      // Refresh inventory items
-      const refreshedItems = await getInventoryItems();
-      setItems(refreshedItems);
+      // Validate that an athlete is assigned when the status is "Checked Out"
+      if (itemData.status === 'Checked Out' && !itemData.assignedTo) {
+        setSnackbar({
+          open: true,
+          message: 'Please select an athlete when status is Checked Out',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      // Create data object for Firestore with only necessary fields
+      const firestoreData = {
+        name: itemData.name,
+        itemId: itemData.itemId || `ITEM-${Math.floor(Math.random() * 10000)}`,
+        type: itemData.type,
+        category: itemData.category,
+        status: itemData.status,
+        assignedTo: itemData.assignedTo || null
+      };
+      
+      // Add optional fields if they exist
+      if (itemData.size) firestoreData.size = itemData.size;
+      if (itemData.condition) firestoreData.condition = itemData.condition;
+      if (itemData.location) firestoreData.location = itemData.location;
+      if (itemData.notes) firestoreData.notes = itemData.notes;
+      
+      console.log('Saving item data:', firestoreData);
+      
+      let savedItem;
+      
+      if (selectedItem) {
+        // Updating existing item
+        const itemRef = doc(db, 'inventory', selectedItem.id);
+        await updateDoc(itemRef, firestoreData);
+        savedItem = { id: selectedItem.id, ...firestoreData };
+        
+        // Update the items state
+        setItems(items.map(item => 
+          item.id === selectedItem.id ? savedItem : item
+        ));
+      } else {
+        // Creating new item
+        const inventoryCollection = collection(db, 'inventory');
+        const docRef = await addDoc(inventoryCollection, firestoreData);
+        savedItem = { id: docRef.id, ...firestoreData };
+        
+        // Add to the items state
+        setItems([...items, savedItem]);
+      }
+      
+      console.log('Item saved successfully:', savedItem);
       
       // Close dialog
       setOpenItemDialog(false);
       
-      // Animate the updated grid
-      if (gridRef.current) {
-        gsap.fromTo(
-          gridRef.current,
-          { opacity: 0.8 },
-          { opacity: 1, duration: 0.5, ease: 'power2.out' }
-        );
+      // Refresh athletes to get updated uniform information
+      const refreshedAthletes = await getAthletes();
+      setAthletes(refreshedAthletes);
+      
+      // Show success message
+      setSnackbar({
+        open: true,
+        message: `Item ${selectedItem ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
+      
+      // Animate the newly added or updated item
+      if (savedItem) {
+        const itemElement = document.querySelector(`[data-id="${savedItem.id}"]`);
+        if (itemElement) {
+          gsap.from(itemElement, {
+            backgroundColor: 'rgba(76, 175, 80, 0.3)',
+            duration: 2,
+            ease: 'power2.out'
+          });
+        }
       }
-    } catch (err) {
-      console.error('Error saving item:', err);
-      toast.error(err.message || 'Failed to save item');
+    } catch (error) {
+      console.error('Error saving item:', error);
+      setSnackbar({
+        open: true,
+        message: `Error: ${error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -212,12 +407,13 @@ export default function InventoryPage() {
     if (!selectedItem) return;
     
     try {
+      console.log('Deleting item:', selectedItem);
+      
       await deleteInventoryItem(selectedItem.id);
       toast.success('Item deleted successfully');
       
-      // Refresh inventory items
-      const refreshedItems = await getInventoryItems();
-      setItems(refreshedItems);
+      // Directly update items in state
+      setItems(prevItems => prevItems.filter(item => item.id !== selectedItem.id));
       
       // Close dialog
       setOpenDeleteDialog(false);
@@ -227,91 +423,202 @@ export default function InventoryPage() {
     }
   };
   
-  // Handle assigning an item to an athlete
+  // Handle assigning a uniform to an athlete
   const handleAssignItem = async () => {
-    if (!selectedItem || !itemData.assignedTo) return;
-    
     try {
-      await assignInventoryItem(selectedItem.id, itemData.assignedTo);
-      toast.success('Item assigned successfully');
+      setLoading(true);
+      console.log('Assignment data:', itemData);
+      console.log('Selected item for assignment:', selectedItem);
+
+      // Update the item with assignment data
+      const updatedItemData = {
+        ...selectedItem,
+        status: itemData.assignedTo ? 'Checked Out' : 'Available',
+        assignedTo: itemData.assignedTo || null
+      };
+
+      console.log('Updated item data for assignment:', updatedItemData);
+
+      // Find athlete name for logging
+      const selectedAthlete = athletes.find(a => a.id === itemData.assignedTo);
+      console.log('Selected athlete:', selectedAthlete);
       
-      // Refresh inventory items
-      const refreshedItems = await getInventoryItems();
-      setItems(refreshedItems);
+      if (selectedAthlete) {
+        console.log(`Assigning item to: ${selectedAthlete.firstName} ${selectedAthlete.lastName}`);
+      } else if (itemData.assignedTo) {
+        console.log(`Assigning to athlete ID but athlete not found in list: ${itemData.assignedTo}`);
+      } else {
+        console.log('Unassigning item (making available)');
+      }
+
+      // Update the item in Firestore
+      const itemRef = doc(db, 'inventory', selectedItem.id);
       
-      // Close dialog
+      // Only save essential fields to Firestore
+      const firestoreData = {
+        status: updatedItemData.status,
+        assignedTo: updatedItemData.assignedTo
+      };
+      
+      await updateDoc(itemRef, firestoreData);
+      console.log('Item updated in Firestore:', firestoreData);
+
+      // Update the item in the UI state
+      setItems(items.map(item => 
+        item.id === selectedItem.id ? updatedItemData : item
+      ));
+
+      // Close the dialog
       setOpenAssignDialog(false);
-    } catch (err) {
-      console.error('Error assigning item:', err);
-      toast.error(err.message || 'Failed to assign item');
+      
+      // Refresh athletes to get updated uniform information
+      const refreshedAthletes = await getAthletes();
+      setAthletes(refreshedAthletes);
+      
+      setSnackbar({
+        open: true,
+        message: `Item ${itemData.assignedTo ? 'assigned' : 'unassigned'} successfully`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error assigning item:', error);
+      setSnackbar({
+        open: true,
+        message: `Error: ${error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Handle edit click
+  const handleEditClick = (item) => {
+    handleOpenItemDialog(item);
+  };
+  
+  // Handle assign click
+  const handleAssignClick = (item) => {
+    handleOpenAssignDialog(item);
+  };
+  
+  // Handle delete click
+  const handleDeleteClick = (id) => {
+    // Find the item with the given id
+    const itemToDelete = items.find(item => item.id === id);
+    if (itemToDelete) {
+      handleOpenDeleteDialog(itemToDelete);
+    } else {
+      console.error(`Item with id ${id} not found`);
     }
   };
   
   // DataGrid columns configuration
   const columns = [
     { 
-      field: 'itemId', 
-      headerName: 'Item ID', 
+      field: 'name', 
+      headerName: 'Item Name', 
       flex: 1,
-      minWidth: 120
+      valueGetter: (params) => {
+        if (!params || !params.row) return '';
+        return params.row.name || params.row.itemId || '';
+      }
+    },
+    { 
+      field: 'category', 
+      headerName: 'Category', 
+      width: 130
     },
     { 
       field: 'type', 
       headerName: 'Type', 
-      flex: 1,
-      minWidth: 120
+      width: 130
+    },
+    { 
+      field: 'size', 
+      headerName: 'Size', 
+      width: 80
+    },
+    { 
+      field: 'condition', 
+      headerName: 'Condition', 
+      width: 100
     },
     { 
       field: 'status', 
       headerName: 'Status', 
+      width: 130
+    },
+    {
+      field: 'assignedTo',
+      headerName: 'Assigned To',
       flex: 1,
-      minWidth: 140,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value}
-          color={
-            params.value === 'Available' ? 'success' :
-            params.value === 'Checked Out' ? 'secondary' :
-            params.value === 'Damaged' ? 'error' :
-            'default'
+      renderCell: (params) => {
+        // If we have an assignedTo ID, look up the athlete in our athletes array
+        if (params.value) {
+          const athlete = athletes.find(a => a.id === params.value);
+          if (athlete) {
+            return <Chip 
+              label={`${athlete.firstName} ${athlete.lastName}`} 
+              color="primary" 
+              size="small" 
+            />;
+          } else {
+            // If we can't find the athlete in our list, show the ID in a neutral color
+            return <Chip 
+              label={`ID: ${params.value.substring(0, 6)}...`} 
+              color="default" 
+              size="small" 
+            />;
           }
-          size="small"
-        />
-      )
+        }
+        return 'Not Assigned';
+      }
     },
     { 
-      field: 'assignedToName', 
-      headerName: 'Assigned To', 
-      flex: 1.5,
-      minWidth: 180,
-      valueGetter: (params) => {
-        return params.row.assignedToName || 'Not Assigned';
+      field: 'lastUpdated', 
+      headerName: 'Last Updated', 
+      width: 150,
+      valueFormatter: (params) => {
+        if (!params || !params.value) return '-';
+        return format(new Date(params.value), 'MM/dd/yyyy');
       }
     },
     {
       field: 'actions',
-      type: 'actions',
       headerName: 'Actions',
-      width: 120,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<EditIcon />}
-          label="Edit"
-          onClick={() => handleOpenItemDialog(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<AssignmentIndIcon />}
-          label="Assign"
-          onClick={() => handleOpenAssignDialog(params.row)}
-          showInMenu
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon />}
-          label="Delete"
-          onClick={() => handleOpenDeleteDialog(params.row)}
-          showInMenu
-        />
-      ]
+      width: 150,
+      sortable: false,
+      renderCell: (params) => {
+        if (!params || !params.row) {
+          return null;
+        }
+        return (
+          <Box>
+            <IconButton 
+              size="small" 
+              onClick={() => handleEditClick(params.row)}
+              aria-label="edit"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton 
+              size="small" 
+              onClick={() => handleAssignClick(params.row)}
+              aria-label="assign"
+            >
+              <AssignmentIcon fontSize="small" />
+            </IconButton>
+            <IconButton 
+              size="small" 
+              onClick={() => handleDeleteClick(params.row.id)}
+              aria-label="delete"
+            >
+              <DeleteIcon fontSize="small" color="error" />
+            </IconButton>
+          </Box>
+        );
+      }
     }
   ];
   
@@ -355,14 +662,16 @@ export default function InventoryPage() {
             
             <Box sx={{ height: 500, mx: 3, mb: 3 }} ref={gridRef}>
               {loading ? (
-                <LinearProgress />
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <CircularProgress />
+                </Box>
               ) : error ? (
-                <Typography color="error" sx={{ p: 2 }}>
-                  {error}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <Alert severity="error">{error}</Alert>
+                </Box>
               ) : (
                 <DataGrid
-                  rows={items}
+                  rows={items || []}
                   columns={columns}
                   initialState={{
                     pagination: {
@@ -373,13 +682,39 @@ export default function InventoryPage() {
                   }}
                   pageSizeOptions={[5, 10, 25, 50]}
                   slots={{
-                    toolbar: GridToolbar
+                    toolbar: GridToolbar,
+                    noRowsOverlay: () => (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <Typography variant="h6" color="text.secondary" align="center">
+                          No inventory items found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          Add items to get started
+                        </Typography>
+                      </Box>
+                    )
                   }}
                   density="standard"
                   autoHeight
+                  getRowId={(row) => {
+                    if (!row) return Math.random().toString(36).substring(2, 11);
+                    return row.id || Math.random().toString(36).substring(2, 11);
+                  }}
                   sx={{
                     '& .MuiDataGrid-cell:hover': {
                       backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  onError={(params) => {
+                    console.error('DataGrid error:', params);
+                    return null;
+                  }}
+                  componentsProps={{
+                    cell: {
+                      onError: (error) => {
+                        console.log("DataGrid cell error:", error);
+                        return null;
+                      }
                     }
                   }}
                 />
@@ -403,13 +738,36 @@ export default function InventoryPage() {
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField
               fullWidth
+              label="Item Name"
+              name="name"
+              value={itemData.name}
+              onChange={handleInputChange}
+              required
+              placeholder="e.g. Track Jersey #10"
+            />
+            
+            <TextField
+              fullWidth
               label="Item ID"
               name="itemId"
               value={itemData.itemId}
               onChange={handleInputChange}
-              required
               placeholder="e.g. U-1001"
             />
+            
+            <FormControl fullWidth required>
+              <InputLabel>Category</InputLabel>
+              <Select
+                name="category"
+                value={itemData.category}
+                onChange={handleInputChange}
+                label="Category"
+              >
+                {categoryOptions.map(option => (
+                  <MenuItem key={option} value={option}>{option}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             
             <FormControl fullWidth required>
               <InputLabel>Type</InputLabel>
@@ -433,10 +791,9 @@ export default function InventoryPage() {
                 onChange={handleInputChange}
                 label="Status"
               >
-                <MenuItem value="Available">Available</MenuItem>
-                <MenuItem value="Checked Out">Checked Out</MenuItem>
-                <MenuItem value="Damaged">Damaged</MenuItem>
-                <MenuItem value="Lost">Lost</MenuItem>
+                {statusOptions.map(option => (
+                  <MenuItem key={option} value={option}>{option}</MenuItem>
+                ))}
               </Select>
             </FormControl>
             
@@ -445,13 +802,16 @@ export default function InventoryPage() {
                 <InputLabel>Assigned To</InputLabel>
                 <Select
                   name="assignedTo"
-                  value={itemData.assignedTo}
+                  value={itemData.assignedTo || ''}
                   onChange={handleInputChange}
                   label="Assigned To"
                 >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
                   {athletes.map(athlete => (
                     <MenuItem key={athlete.id} value={athlete.id}>
-                      {athlete.name}
+                      {athlete.firstName ? `${athlete.firstName} ${athlete.lastName}` : athlete.name}
                     </MenuItem>
                   ))}
                 </Select>
@@ -467,7 +827,7 @@ export default function InventoryPage() {
             onClick={handleSaveItem} 
             variant="contained" 
             color="primary"
-            disabled={!itemData.itemId || !itemData.type || !itemData.status || 
+            disabled={!itemData.name || !itemData.category || !itemData.type || !itemData.status || 
                       (itemData.status === 'Checked Out' && !itemData.assignedTo)}
           >
             {selectedItem ? 'Update' : 'Add'}
@@ -522,7 +882,7 @@ export default function InventoryPage() {
             <InputLabel>Assign To Athlete</InputLabel>
             <Select
               name="assignedTo"
-              value={itemData.assignedTo}
+              value={itemData.assignedTo || ''}
               onChange={handleInputChange}
               label="Assign To Athlete"
             >
@@ -531,7 +891,7 @@ export default function InventoryPage() {
               </MenuItem>
               {athletes.map(athlete => (
                 <MenuItem key={athlete.id} value={athlete.id}>
-                  {athlete.name}
+                  {athlete.firstName ? `${athlete.firstName} ${athlete.lastName}` : athlete.name}
                 </MenuItem>
               ))}
             </Select>
@@ -550,6 +910,22 @@ export default function InventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 } 

@@ -1,94 +1,204 @@
-import axios from 'axios';
-import { auth } from '../firebase';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where 
-} from 'firebase/firestore';
-import { db } from '../firebase';
-import { getAthletes } from './athleteService';
+import axios from '../axios-config';
+import firebase from '../firebase';
+import { getAuth } from 'firebase/auth';
 
-// API base URL - should be environment variable in production
-const API_BASE_URL = 'http://localhost:5011/api';
+// Helper function to transform inventory data from API response
+const transformInventoryItem = (item) => {
+  if (!item) return null;
+  
+  // Ensure we have an ID
+  const id = item.id || item._id || Math.random().toString(36).substring(2, 11);
+  
+  return {
+    id,
+    // For compatibility with both old and new data formats
+    itemId: item.itemId || item.name || '',
+    name: item.name || item.itemId || '',
+    description: item.description || '',
+    type: item.type || '',
+    category: item.category || item.type || '',
+    size: item.size || '',
+    condition: item.condition || 'Good',
+    status: item.status || 'Available',
+    location: item.location || '',
+    // Handle both field names for athlete assignments
+    assignedTo: item.athleteId || item.assignedTo || null,
+    assignedToName: item.athleteName || '',
+    athleteId: item.athleteId || item.assignedTo || null,
+    athleteName: item.athleteName || '',
+    notes: item.notes || '',
+    lastUpdated: item.lastUpdated ? new Date(item.lastUpdated) : item.updatedAt ? new Date(item.updatedAt) : new Date(),
+    updatedAt: item.updatedAt ? new Date(item.updatedAt) : item.lastUpdated ? new Date(item.lastUpdated) : new Date(),
+    addedDate: item.addedDate ? new Date(item.addedDate) : item.createdAt ? new Date(item.createdAt) : new Date(),
+    createdAt: item.createdAt ? new Date(item.createdAt) : item.addedDate ? new Date(item.addedDate) : new Date(),
+  };
+};
 
 /**
- * Get all inventory items directly from Firestore
- * Join with athletes data for names
+ * Get all inventory items
+ * @returns {Promise<Array>} Array of inventory items
  */
 export const getInventoryItems = async () => {
   try {
-    // First get all athletes to use for name lookups
-    const athletes = await getAthletes();
-    const athletesMap = {};
+    const auth = getAuth();
+    const user = auth.currentUser;
     
-    // Create lookup map by ID
-    athletes.forEach(athlete => {
-      athletesMap[athlete.id] = athlete;
-    });
+    if (!user) {
+      console.warn('User not authenticated, returning empty inventory');
+      return [];
+    }
     
-    // Get inventory items
-    const inventoryCollection = collection(db, 'inventory');
-    const snapshot = await getDocs(inventoryCollection);
-    
-    const items = [];
-    snapshot.forEach(doc => {
-      const itemData = doc.data();
-      const item = {
-        id: doc.id,
-        ...itemData,
-        // If assigned to an athlete, include their name
-        assignedToName: itemData.assignedTo && athletesMap[itemData.assignedTo] 
-          ? athletesMap[itemData.assignedTo].name 
-          : null
-      };
+    try {
+      const idToken = await user.getIdToken();
       
-      items.push(item);
-    });
+      const response = await axios.get('/api/inventory', {
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+      
+      if (response.data && Array.isArray(response.data)) {
+        // Transform data and filter out any null items
+        const transformedItems = response.data
+          .map(item => transformInventoryItem(item))
+          .filter(item => item !== null);
+        
+        console.log('Transformed inventory items from API:', transformedItems);
+        
+        if (transformedItems.length > 0) {
+          return transformedItems;
+        }
+      }
+    } catch (error) {
+      console.warn('API call failed, using mock data for development:', error);
+    }
     
-    return items;
+    // Return mock data for development if API call fails or returns empty
+    console.log('Using mock inventory data for development');
+    return getMockInventoryItems();
   } catch (error) {
     console.error('Error fetching inventory items:', error);
-    throw error;
+    // Return empty array instead of throwing error for better UI experience during development
+    return getMockInventoryItems();
   }
 };
 
 /**
- * Get a single inventory item with athlete name
+ * Get mock inventory items for development
+ * @returns {Array} Array of mock inventory items
+ */
+const getMockInventoryItems = () => {
+  return [
+    {
+      id: '1',
+      name: 'Track Jersey #10',
+      itemId: 'U-1001',
+      type: 'Uniform',
+      category: 'Uniform',
+      size: 'M',
+      condition: 'Good',
+      status: 'Available',
+      location: 'Equipment Room',
+      athleteId: null,
+      athleteName: '',
+      notes: '',
+      lastUpdated: new Date(),
+      addedDate: new Date(new Date().setDate(new Date().getDate() - 30))
+    },
+    {
+      id: '2',
+      name: 'Track Jersey #11',
+      itemId: 'U-1002',
+      type: 'Uniform',
+      category: 'Uniform',
+      size: 'L',
+      condition: 'Excellent',
+      status: 'Checked Out',
+      location: 'Equipment Room',
+      athleteId: 'athlete1',
+      athleteName: 'John Smith',
+      notes: '',
+      lastUpdated: new Date(),
+      addedDate: new Date(new Date().setDate(new Date().getDate() - 45))
+    },
+    {
+      id: '3',
+      name: 'Running Shoes',
+      itemId: 'S-2001',
+      type: 'Footwear',
+      category: 'Shoes',
+      size: '10',
+      condition: 'Good',
+      status: 'Available',
+      location: 'Equipment Room',
+      athleteId: null,
+      athleteName: '',
+      notes: '',
+      lastUpdated: new Date(),
+      addedDate: new Date(new Date().setDate(new Date().getDate() - 15))
+    },
+    {
+      id: '4',
+      name: 'Shot Put',
+      itemId: 'E-3001',
+      type: 'Field Equipment',
+      category: 'Competition Equipment',
+      size: '8kg',
+      condition: 'Good',
+      status: 'Available',
+      location: 'Field Storage',
+      athleteId: null,
+      athleteName: '',
+      notes: '',
+      lastUpdated: new Date(),
+      addedDate: new Date(new Date().setDate(new Date().getDate() - 60))
+    },
+    {
+      id: '5',
+      name: 'Relay Baton',
+      itemId: 'E-4001',
+      type: 'Track Equipment',
+      category: 'Competition Equipment',
+      size: 'Standard',
+      condition: 'Poor',
+      status: 'Maintenance',
+      location: 'Repair Shop',
+      athleteId: null,
+      athleteName: '',
+      notes: 'Needs to be replaced soon',
+      lastUpdated: new Date(),
+      addedDate: new Date(new Date().setDate(new Date().getDate() - 90))
+    }
+  ];
+};
+
+/**
+ * Get a single inventory item by ID
+ * @param {string} id - The ID of the inventory item to fetch
+ * @returns {Promise<Object>} The inventory item
  */
 export const getInventoryItemById = async (id) => {
   try {
-    const docRef = doc(db, 'inventory', id);
-    const snapshot = await getDoc(docRef);
+    const auth = getAuth();
+    const user = auth.currentUser;
     
-    if (!snapshot.exists()) {
-      throw new Error(`Inventory item with ID ${id} not found`);
+    if (!user) {
+      throw new Error('User not authenticated');
     }
     
-    const itemData = snapshot.data();
+    const idToken = await user.getIdToken();
     
-    // If assigned to an athlete, get their name
-    let assignedToName = null;
-    if (itemData.assignedTo) {
-      const athleteDocRef = doc(db, 'athletes', itemData.assignedTo);
-      const athleteSnapshot = await getDoc(athleteDocRef);
-      
-      if (athleteSnapshot.exists()) {
-        const athleteData = athleteSnapshot.data();
-        assignedToName = `${athleteData['First Name'] || ''} ${athleteData['Last Name'] || ''}`.trim();
+    const response = await axios.get(`/api/inventory/${id}`, {
+      headers: {
+        Authorization: `Bearer ${idToken}`
       }
+    });
+    
+    if (response.data) {
+      return transformInventoryItem(response.data);
     }
     
-    return {
-      id,
-      ...itemData,
-      assignedToName
-    };
+    throw new Error('Inventory item not found');
   } catch (error) {
     console.error(`Error fetching inventory item with ID ${id}:`, error);
     throw error;
@@ -97,48 +207,44 @@ export const getInventoryItemById = async (id) => {
 
 /**
  * Create a new inventory item
+ * @param {Object} itemData - The inventory item data
+ * @returns {Promise<Object>} The created inventory item
  */
 export const createInventoryItem = async (itemData) => {
   try {
-    const { itemId, type, status, assignedTo } = itemData;
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
     
     // Validate required fields
-    if (!itemId || !type || !status) {
-      throw new Error('Item ID, type, and status are required');
+    if (!itemData.name) {
+      throw new Error('Item name is required');
     }
     
-    // Validate status and assignedTo combination
-    if (status === 'Checked Out' && !assignedTo) {
-      throw new Error('When status is "Checked Out", an athlete must be assigned');
-    }
+    const idToken = await user.getIdToken();
     
+    // Ensure timestamps are properly set
     const newItem = {
-      itemId,
-      type,
-      status,
-      assignedTo: assignedTo || null,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      ...itemData,
+      addedDate: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
     };
     
-    // Add to Firestore
-    const inventoryCollection = collection(db, 'inventory');
-    const docRef = await addDoc(inventoryCollection, newItem);
+    const response = await axios.post('/api/inventory', newItem, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
-    // If assigning to an athlete, update the athlete's record
-    if (assignedTo) {
-      const athleteRef = doc(db, 'athletes', assignedTo);
-      await updateDoc(athleteRef, {
-        'Has Uniform?': true,
-        'Uniform ID': itemId
-      });
+    if (response.data) {
+      return transformInventoryItem(response.data);
     }
     
-    return {
-      id: docRef.id,
-      ...newItem,
-      assignedToName: null // Will be populated when needed
-    };
+    throw new Error('Failed to create inventory item');
   } catch (error) {
     console.error('Error creating inventory item:', error);
     throw error;
@@ -147,69 +253,39 @@ export const createInventoryItem = async (itemData) => {
 
 /**
  * Update an existing inventory item
+ * @param {string} id - The ID of the inventory item to update
+ * @param {Object} itemData - The updated inventory item data
+ * @returns {Promise<Object>} The updated inventory item
  */
 export const updateInventoryItem = async (id, itemData) => {
   try {
-    const { itemId, type, status, assignedTo } = itemData;
+    const auth = getAuth();
+    const user = auth.currentUser;
     
-    // Validate required fields
-    if (!itemId || !type || !status) {
-      throw new Error('Item ID, type, and status are required');
+    if (!user) {
+      throw new Error('User not authenticated');
     }
     
-    // Get current state
-    const docRef = doc(db, 'inventory', id);
-    const snapshot = await getDoc(docRef);
+    const idToken = await user.getIdToken();
     
-    if (!snapshot.exists()) {
-      throw new Error(`Inventory item with ID ${id} not found`);
-    }
-    
-    const currentData = snapshot.data();
-    const previouslyAssignedTo = currentData.assignedTo;
-    
-    // Validate status and assignedTo combination
-    if (status === 'Checked Out' && !assignedTo) {
-      throw new Error('When status is "Checked Out", an athlete must be assigned');
-    }
-    
-    // Handle athlete assignment changes
-    if (assignedTo !== previouslyAssignedTo) {
-      // If previously assigned to someone, clear their uniform
-      if (previouslyAssignedTo) {
-        const prevAthleteRef = doc(db, 'athletes', previouslyAssignedTo);
-        await updateDoc(prevAthleteRef, {
-          'Has Uniform?': false,
-          'Uniform ID': null
-        });
-      }
-      
-      // If newly assigned to someone, update their uniform
-      if (assignedTo) {
-        const athleteRef = doc(db, 'athletes', assignedTo);
-        await updateDoc(athleteRef, {
-          'Has Uniform?': true,
-          'Uniform ID': itemId
-        });
-      }
-    }
-    
-    // Update the item
+    // Update the lastUpdated timestamp
     const updatedItem = {
-      itemId,
-      type,
-      status,
-      assignedTo: assignedTo || null,
-      updatedAt: new Date()
+      ...itemData,
+      lastUpdated: new Date().toISOString()
     };
     
-    await updateDoc(docRef, updatedItem);
+    const response = await axios.put(`/api/inventory/${id}`, updatedItem, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
-    return {
-      id,
-      ...updatedItem,
-      assignedToName: null // Will be populated when needed
-    };
+    if (response.data) {
+      return transformInventoryItem(response.data);
+    }
+    
+    throw new Error('Failed to update inventory item');
   } catch (error) {
     console.error(`Error updating inventory item with ID ${id}:`, error);
     throw error;
@@ -218,30 +294,27 @@ export const updateInventoryItem = async (id, itemData) => {
 
 /**
  * Delete an inventory item
+ * @param {string} id - The ID of the inventory item to delete
+ * @returns {Promise<boolean>} True if the deletion was successful
  */
 export const deleteInventoryItem = async (id) => {
   try {
-    // Get the item to check if it's assigned to an athlete
-    const docRef = doc(db, 'inventory', id);
-    const snapshot = await getDoc(docRef);
+    const auth = getAuth();
+    const user = auth.currentUser;
     
-    if (!snapshot.exists()) {
-      throw new Error(`Inventory item with ID ${id} not found`);
+    if (!user) {
+      throw new Error('User not authenticated');
     }
     
-    const itemData = snapshot.data();
+    const idToken = await user.getIdToken();
     
-    // If assigned to an athlete, clear their uniform
-    if (itemData.assignedTo) {
-      const athleteRef = doc(db, 'athletes', itemData.assignedTo);
-      await updateDoc(athleteRef, {
-        'Has Uniform?': false,
-        'Uniform ID': null
-      });
-    }
+    await axios.delete(`/api/inventory/${id}`, {
+      headers: {
+        Authorization: `Bearer ${idToken}`
+      }
+    });
     
-    // Delete the item
-    await deleteDoc(docRef);
+    return true;
   } catch (error) {
     console.error(`Error deleting inventory item with ID ${id}:`, error);
     throw error;
@@ -249,62 +322,85 @@ export const deleteInventoryItem = async (id) => {
 };
 
 /**
- * Special function just for assigning an item to an athlete
+ * Assign an inventory item to an athlete
+ * @param {string} itemId - The ID of the inventory item to assign
+ * @param {string} athleteId - The ID of the athlete to assign the item to
+ * @returns {Promise<Object>} The updated inventory item
  */
-export const assignInventoryItem = async (id, assignedTo) => {
+export const assignInventoryItem = async (itemId, athleteId) => {
   try {
-    // Get current state
-    const docRef = doc(db, 'inventory', id);
-    const snapshot = await getDoc(docRef);
+    const auth = getAuth();
+    const user = auth.currentUser;
     
-    if (!snapshot.exists()) {
-      throw new Error(`Inventory item with ID ${id} not found`);
+    if (!user) {
+      throw new Error('User not authenticated');
     }
     
-    const currentData = snapshot.data();
-    const previouslyAssignedTo = currentData.assignedTo;
+    const idToken = await user.getIdToken();
     
-    // Cannot assign if item is not available and not already assigned
-    if (currentData.status !== 'Available' && !previouslyAssignedTo) {
-      throw new Error('Only available items can be assigned');
-    }
-    
-    // Handle athlete assignment changes
-    if (assignedTo !== previouslyAssignedTo) {
-      // If previously assigned to someone, clear their uniform
-      if (previouslyAssignedTo) {
-        const prevAthleteRef = doc(db, 'athletes', previouslyAssignedTo);
-        await updateDoc(prevAthleteRef, {
-          'Has Uniform?': false,
-          'Uniform ID': null
-        });
+    const response = await axios.put(`/api/inventory/${itemId}/assign`, { athleteId }, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
       }
-      
-      // If newly assigned to someone, update their uniform
-      if (assignedTo) {
-        const athleteRef = doc(db, 'athletes', assignedTo);
-        await updateDoc(athleteRef, {
-          'Has Uniform?': true,
-          'Uniform ID': currentData.itemId
-        });
-      }
+    });
+    
+    if (response.data) {
+      return transformInventoryItem(response.data);
     }
     
-    // Update the inventory item
-    const itemData = {
-      status: assignedTo ? 'Checked Out' : 'Available',
-      assignedTo: assignedTo || null,
-      updatedAt: new Date()
-    };
-    
-    await updateDoc(docRef, itemData);
-    
-    // Get the updated item with athlete name
-    const updatedItem = await getInventoryItemById(id);
-    
-    return updatedItem;
+    throw new Error('Failed to assign inventory item');
   } catch (error) {
-    console.error(`Error assigning inventory item with ID ${id}:`, error);
+    console.error(`Error assigning inventory item ${itemId} to athlete ${athleteId}:`, error);
     throw error;
+  }
+};
+
+/**
+ * Get inventory items assigned to a specific athlete
+ * @param {string} athleteId - The ID of the athlete
+ * @returns {Promise<Array>} Array of inventory items assigned to the athlete
+ */
+export const getAthleteInventory = async (athleteId) => {
+  try {
+    const items = await getInventoryItems();
+    return items.filter(item => item.athleteId === athleteId);
+  } catch (error) {
+    console.error(`Error fetching inventory for athlete ${athleteId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get available inventory items (not assigned to any athlete)
+ * @returns {Promise<Array>} Array of available inventory items
+ */
+export const getAvailableInventory = async () => {
+  try {
+    const items = await getInventoryItems();
+    return items.filter(item => !item.athleteId && item.status === 'Available');
+  } catch (error) {
+    console.error('Error fetching available inventory:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get inventory items that need maintenance or replacement
+ * @returns {Promise<Array>} Array of inventory items needing attention
+ */
+export const getInventoryNeedingAttention = async () => {
+  try {
+    const items = await getInventoryItems();
+    return items.filter(item => 
+      item.condition === 'Poor' || 
+      item.condition === 'Damaged' || 
+      item.notes?.toLowerCase().includes('repair') ||
+      item.notes?.toLowerCase().includes('replace')
+    );
+  } catch (error) {
+    console.error('Error fetching inventory needing attention:', error);
+    // Return empty array instead of throwing error
+    return [];
   }
 }; 

@@ -22,9 +22,10 @@ const PORT = process.env.PORT || 5011;
 // Middleware
 // CORS configuration - development only
 app.use(cors({
-  origin: '*',  // Allow all origins (not recommended for production)
-  methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],  // React dev server
+  methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 app.use(express.json());
 

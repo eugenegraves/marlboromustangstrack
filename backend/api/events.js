@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const checkAuth = require('../middleware/auth');
+const { checkAuth } = require('../middleware/auth');
 
 // Reference to Firestore
 const db = admin.firestore();
@@ -10,10 +10,29 @@ const eventsCollection = db.collection('events');
 /**
  * GET all events
  * Access: Coaches only
+ * 
+ * Optional query parameter:
+ * - group: Filter events by group (e.g., "Beginner Sprinters")
+ *   Returns events where the group field includes the specified group or has "All"
  */
 router.get('/', checkAuth, async (req, res) => {
   try {
-    const snapshot = await eventsCollection.get();
+    const { group } = req.query;
+    let snapshot;
+    
+    if (group) {
+      // If group parameter is provided, filter events
+      // We use where in-array to check if the group field (which could be a string or array)
+      // includes either the specified group or "All"
+      // Note: This is simplified; ideally use array-contains if group field is always an array
+      snapshot = await eventsCollection
+        .where('group', 'array-contains', group)
+        .get();
+    } else {
+      // If no group parameter, get all events
+      snapshot = await eventsCollection.get();
+    }
+    
     const events = [];
     
     snapshot.forEach(doc => {

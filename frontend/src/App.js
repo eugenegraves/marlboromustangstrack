@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import { Toaster } from 'react-hot-toast';
+import testInventoryApi from './testApi';
 
 // Layouts
 import DashboardLayout from './components/DashboardLayout';
@@ -66,6 +67,16 @@ const theme = createTheme({
 });
 
 function App() {
+  // Add this effect to test the API when the app starts
+  useEffect(() => {
+    const testApi = async () => {
+      const success = await testInventoryApi();
+      console.log('API test completed with success:', success);
+    };
+    
+    testApi();
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

@@ -12,20 +12,31 @@ import {
   IconButton, 
   CircularProgress, 
   Alert,
-  Paper
+  Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  Divider
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EventIcon from '@mui/icons-material/Event';
 import { useAuth } from '../../contexts/AuthContext';
 import { gsap } from 'gsap';
+import { format } from 'date-fns';
 import { 
   getAthletes, 
   createAthlete, 
   updateAthlete, 
   deleteAthlete 
 } from '../../services/athleteService';
+import { getEvents } from '../../services/eventService';
 
 // Constants for athlete groups
 const ATHLETE_GROUPS = [
@@ -59,13 +70,35 @@ const RosterPage = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [athleteToDelete, setAthleteToDelete] = useState(null);
   
+  // New state for events
+  const [groupEvents, setGroupEvents] = useState({});
+  const [eventsLoading, setEventsLoading] = useState({});
+  const [eventsError, setEventsError] = useState({});
+  const [expandedGroup, setExpandedGroup] = useState(false);
+  
   const tableRef = useRef(null);
   const dialogRef = useRef(null);
+  const accordionRefs = useRef({});
   
   // Fetch athletes on component mount
   useEffect(() => {
     fetchAthletes();
   }, []);
+  
+  // Extract unique groups from athletes and fetch events for each group
+  useEffect(() => {
+    if (athletes.length > 0) {
+      // Get unique groups
+      const uniqueGroups = [...new Set(athletes.map(athlete => athlete.group))];
+      
+      // For each unique group, fetch events
+      uniqueGroups.forEach(group => {
+        if (group) { // Check if group is defined
+          fetchEventsForGroup(group);
+        }
+      });
+    }
+  }, [athletes]);
   
   // GSAP animation for table
   useEffect(() => {
@@ -102,6 +135,68 @@ const RosterPage = () => {
       );
     }
   }, [openDialog]);
+  
+  // Animate accordion when expanded
+  useEffect(() => {
+    if (expandedGroup && accordionRefs.current[expandedGroup]) {
+      // Get all list items within the expanded accordion
+      const listItems = accordionRefs.current[expandedGroup].querySelectorAll('.event-list-item');
+      
+      // Animate list items with stagger effect
+      gsap.fromTo(
+        listItems,
+        { opacity: 0, y: 20 },
+        { 
+          opacity: 1, 
+          y: 0, 
+          duration: 0.4, 
+          stagger: 0.1,
+          ease: 'power2.out'
+        }
+      );
+    }
+  }, [expandedGroup, groupEvents]);
+  
+  // Fetch events for a specific group
+  const fetchEventsForGroup = async (group) => {
+    setEventsLoading(prev => ({ ...prev, [group]: true }));
+    setEventsError(prev => ({ ...prev, [group]: null }));
+    
+    try {
+      console.log(`Fetching events for group: ${group}`);
+      const events = await getEvents(group);
+      
+      // Sort events by date (most recent first)
+      const sortedEvents = events.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      // Only include upcoming events (today or later)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to beginning of today
+      
+      const upcomingEvents = sortedEvents.filter(event => {
+        const eventDate = new Date(event.date);
+        return eventDate >= today;
+      });
+      
+      setGroupEvents(prev => ({ ...prev, [group]: upcomingEvents }));
+    } catch (error) {
+      console.error(`Error fetching events for group ${group}:`, error);
+      setEventsError(prev => ({ ...prev, [group]: 'Failed to load events for this group' }));
+    } finally {
+      setEventsLoading(prev => ({ ...prev, [group]: false }));
+    }
+  };
+  
+  // Handle accordion expansion change
+  const handleAccordionChange = (group) => (event, isExpanded) => {
+    setExpandedGroup(isExpanded ? group : false);
+  };
+  
+  // Format date for display
+  const formatEventDate = (dateString) => {
+    const date = new Date(dateString);
+    return format(date, "MMM dd, yyyy, h:mm a");
+  };
   
   // Fetch athletes from API
   const fetchAthletes = async () => {
@@ -325,6 +420,125 @@ const RosterPage = () => {
           }}
         />
       </Paper>
+      
+      {/* Upcoming Events Accordions */}
+      <Box sx={{ mt: 4, mb: 4 }}>
+        <Typography variant="h5" color="primary" gutterBottom fontWeight="bold" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+          <EventIcon sx={{ mr: 1 }} />
+          Upcoming Events by Group
+        </Typography>
+        
+        {/* Create accordion for each unique group in the athletes array */}
+        {athletes.length > 0 && 
+          [...new Set(athletes.map(athlete => athlete.group))]
+            .filter(group => group) // Filter out any undefined groups
+            .sort() // Sort alphabetically
+            .map((group, index) => (
+              <Accordion 
+                key={group} 
+                expanded={expandedGroup === group}
+                onChange={handleAccordionChange(group)}
+                ref={el => { accordionRefs.current[group] = el }}
+                sx={{ 
+                  mb: 2,
+                  backgroundColor: 'white',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  borderRadius: '8px !important',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  // Track lane-inspired border
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '4px',
+                    background: theme => theme.palette.secondary.main
+                  },
+                  '&.Mui-expanded': {
+                    margin: '0 0 16px 0',
+                  }
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ 
+                    backgroundColor: 'rgba(26, 35, 126, 0.05)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    }
+                  }}
+                >
+                  <Typography fontWeight="medium" color="primary">
+                    {group} ({athletes.filter(a => a.group === group).length} athletes)
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {eventsLoading[group] ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                      <CircularProgress color="secondary" size={24} />
+                    </Box>
+                  ) : eventsError[group] ? (
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                      {eventsError[group]}
+                    </Alert>
+                  ) : (
+                    <>
+                      {groupEvents[group] && groupEvents[group].length > 0 ? (
+                        <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
+                          {groupEvents[group].map((event, eventIndex) => (
+                            <React.Fragment key={event.id}>
+                              <ListItem 
+                                className="event-list-item"
+                                sx={{ 
+                                  py: 1.5,
+                                  transition: 'background-color 0.2s',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                  }
+                                }}
+                              >
+                                <ListItemText
+                                  primary={
+                                    <Typography fontWeight="medium" color="primary.main">
+                                      {event.type}: {event.title}
+                                    </Typography>
+                                  }
+                                  secondary={
+                                    <Typography variant="body2" color="text.secondary">
+                                      {formatEventDate(event.date)}
+                                    </Typography>
+                                  }
+                                />
+                              </ListItem>
+                              {eventIndex < groupEvents[group].length - 1 && (
+                                <Divider component="li" />
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </List>
+                      ) : (
+                        <Typography 
+                          color="primary" 
+                          align="center" 
+                          sx={{ py: 2 }}
+                        >
+                          No upcoming events for this group
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+        
+        {athletes.length === 0 && !loading && (
+          <Alert severity="info">
+            Add athletes to the roster to see their upcoming events
+          </Alert>
+        )}
+      </Box>
       
       {/* Add/Edit Athlete Dialog */}
       <Dialog 

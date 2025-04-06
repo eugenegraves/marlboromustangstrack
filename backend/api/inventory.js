@@ -3,6 +3,15 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const { checkAuth } = require('../middleware/auth');
 
+/**
+ * @route   GET /api/inventory/test
+ * @desc    Test endpoint to verify API is working
+ * @access  Public
+ */
+router.get('/test', (req, res) => {
+  res.json({ message: 'Inventory API is working!' });
+});
+
 // Get all inventory items
 router.get('/', checkAuth, async (req, res) => {
   try {
