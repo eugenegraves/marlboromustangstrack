@@ -439,18 +439,12 @@ export const updateEvent = async (id, eventData) => {
  */
 export const deleteEvent = async (id) => {
   try {
-    // Get the current user token for authentication
-    const token = await auth.currentUser.getIdToken();
-    
-    // Delete the event using the backend API
-    await axios.delete(`${API_BASE_URL}/events/${id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
+    // Delete the event directly from Firestore
+    const eventRef = doc(db, 'events', id);
+    await deleteDoc(eventRef);
   } catch (error) {
     console.error(`Error deleting event with ID ${id}:`, error);
-    throw error.response?.data || error;
+    throw error;
   }
 };
 
