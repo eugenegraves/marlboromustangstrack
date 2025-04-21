@@ -185,6 +185,32 @@ export default function InventoryPage() {
     loadData();
   }, []);
   
+  // Handle DataGrid resizing issues in production
+  useEffect(() => {
+    const handleWindowResize = () => {
+      // Force re-render of DataGrid on window resize
+      if (gridRef.current) {
+        const gridElement = gridRef.current.querySelector('.MuiDataGrid-root');
+        if (gridElement) {
+          // Apply height explicitly to ensure proper rendering
+          gridElement.style.height = 'auto';
+          gridElement.style.minHeight = '400px';
+        }
+      }
+    };
+    
+    // Initial call
+    handleWindowResize();
+    
+    // Set up event listener
+    window.addEventListener('resize', handleWindowResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [items, loading]); // Re-apply when items change or loading state changes
+  
   // Animation functions
   const runEntranceAnimations = () => {
     const timeline = gsap.timeline();
@@ -702,7 +728,12 @@ export default function InventoryPage() {
   ];
   
   return (
-    <Container maxWidth="xl">
+    <Container 
+      maxWidth="xl"
+      sx={{
+        pb: 6
+      }}
+    >
       <Box mb={5}>
         <Typography 
           variant="h3" 
@@ -719,7 +750,13 @@ export default function InventoryPage() {
       
       <Grid container spacing={3}>
         <Grid item xs={12}>
-          <Card>
+          <Card
+            sx={{
+              overflow: 'visible',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
             <Box sx={{ p: 3, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="h6" gutterBottom>
@@ -771,23 +808,33 @@ export default function InventoryPage() {
                   density="standard"
                   autoHeight
                   getEstimatedRowHeight={() => 52}
-                  getRowHeight={() => 'auto'}
+                  getRowHeight={() => 52}
+                  rowHeight={52}
                   disableRowSelectionOnClick
                   getRowId={(row) => {
                     if (!row) return Math.random().toString(36).substring(2, 11);
                     return row.id || Math.random().toString(36).substring(2, 11);
                   }}
                   sx={{
-                    '& .MuiDataGrid-cell:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    minHeight: '400px', // Ensure minimum height
+                    height: 'auto',
+                    width: '100%',
+                    '& .MuiDataGrid-root': {
+                      height: 'auto !important'
                     },
                     '& .MuiDataGrid-cell': {
                       padding: '16px 8px',
-                      whiteSpace: 'normal !important',
-                      wordWrap: 'break-word !important'
+                      height: 'auto !important',
+                      whiteSpace: 'normal',
+                      wordWrap: 'break-word',
+                      overflow: 'visible'
                     },
                     '& .MuiDataGrid-row': {
-                      minHeight: '52px !important'
+                      minHeight: '52px',
+                      maxHeight: 'none !important'
+                    },
+                    '& .MuiDataGrid-cell:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
                     }
                   }}
                   onError={(params) => {
@@ -991,6 +1038,28 @@ export default function InventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Production CSS fixes */}
+      <style jsx global>{`
+        .MuiDataGrid-cell {
+          white-space: normal !important;
+          word-wrap: break-word !important;
+          overflow: visible !important;
+          line-height: 1.43 !important;
+          padding: 8px !important;
+          height: auto !important;
+        }
+        .MuiDataGrid-row {
+          min-height: 52px !important;
+          max-height: none !important;
+        }
+        .MuiDataGrid-main {
+          min-height: 400px;
+        }
+        .MuiDataGrid-virtualScroller {
+          overflow: visible !important;
+        }
+      `}</style>
       
       {/* Delete Confirmation Dialog */}
       <Dialog
