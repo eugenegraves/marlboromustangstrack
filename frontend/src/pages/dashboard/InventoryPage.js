@@ -23,7 +23,8 @@ import {
   IconButton,
   Alert,
   Snackbar,
-  Autocomplete
+  Autocomplete,
+  Tooltip
 } from '@mui/material';
 import {
   DataGrid,
@@ -118,15 +119,16 @@ export default function InventoryPage() {
       // Ensure each item has an ID
       const id = item.id || Math.random().toString(36).substring(2, 11);
       
-      // Now we know assignedTo is the key field used in Firestore
-      // We don't need to set athleteName/assignedToName at this level
-      // since we'll handle this in the renderCell function
-      
+      // Ensure essential fields
       return {
         ...item,
         id,
-        // Map itemId to name if name is missing
-        name: item.name || item.itemId || '',
+        // Ensure name field is present and not empty
+        name: item.name || item.itemId || 'Unnamed Item',
+        // Other fields
+        type: item.type || '',
+        category: item.category || item.type || '',
+        status: item.status || 'Available',
         // Ensure we have the assignedTo field (the athlete ID)
         assignedTo: item.assignedTo || null
       };
@@ -340,7 +342,7 @@ export default function InventoryPage() {
       
       // Create data object for Firestore with only necessary fields
       const firestoreData = {
-        name: itemData.name,
+        name: itemData.name.trim(), // Ensure name is trimmed
         itemId: itemData.itemId || `ITEM-${Math.floor(Math.random() * 10000)}`,
         type: itemData.type,
         category: itemData.category,
@@ -352,6 +354,9 @@ export default function InventoryPage() {
         assignedTo: itemData.assignedTo || null,
         lastUpdated: new Date().toISOString()
       };
+      
+      // For debugging
+      console.log('Saving item with name:', firestoreData.name);
       
       // Set creation date for new items
       if (!selectedItem) {
@@ -563,9 +568,15 @@ export default function InventoryPage() {
       field: 'name', 
       headerName: 'Item Name', 
       flex: 1,
-      valueGetter: (params) => {
-        if (!params || !params.row) return '';
-        return params.row.name || params.row.itemId || '';
+      renderCell: (params) => {
+        if (!params || !params.row) return 'Unknown Item';
+        const name = params.row.name || params.row.itemId || 'Unnamed Item';
+        // Add tooltip for longer names
+        return (
+          <Tooltip title={name} placement="top">
+            <Typography noWrap>{name}</Typography>
+          </Tooltip>
+        );
       }
     },
     { 
@@ -778,30 +789,36 @@ export default function InventoryPage() {
         <DialogTitle>
           {selectedItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
         </DialogTitle>
-        <DialogContent>
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Item Name"
-                  name="name"
-                  value={itemData.name}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="e.g. Track Jersey #10"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Item ID"
-                  name="itemId"
-                  value={itemData.itemId}
-                  onChange={handleInputChange}
-                  placeholder="e.g. U-1001"
-                />
-              </Grid>
+        <DialogContent sx={{ p: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                autoFocus
+                required
+                fullWidth
+                id="name"
+                name="name"
+                label="Item Name"
+                value={itemData.name || ''}
+                onChange={handleInputChange}
+                error={!itemData.name?.trim()}
+                helperText={!itemData.name?.trim() ? "Item name is required" : ""}
+                InputProps={{
+                  sx: { fontWeight: 'bold' }
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                id="itemId"
+                name="itemId"
+                label="Item ID"
+                value={itemData.itemId || ''}
+                onChange={handleInputChange}
+                placeholder="e.g., UNIFORM-001"
+              />
             </Grid>
             
             <Grid container spacing={2}>
@@ -927,7 +944,7 @@ export default function InventoryPage() {
               rows={3}
               placeholder="Additional information about this item..."
             />
-          </Stack>
+          </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenItemDialog(false)}>

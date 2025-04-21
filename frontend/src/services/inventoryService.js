@@ -10,11 +10,15 @@ const transformInventoryItem = (item) => {
   // Ensure we have an ID
   const id = item.id || item._id || Math.random().toString(36).substring(2, 11);
   
+  // Log the raw item for debugging
+  console.log('Raw inventory item from Firestore:', item);
+  
   return {
     id,
     // For compatibility with both old and new data formats
-    itemId: item.itemId || item.name || '',
-    name: item.name || item.itemId || '',
+    itemId: item.itemId || '',
+    // Ensure name is set, with proper fallbacks
+    name: item.name || item.itemId || 'Unnamed Item',
     description: item.description || '',
     type: item.type || '',
     category: item.category || item.type || '',
@@ -23,9 +27,9 @@ const transformInventoryItem = (item) => {
     status: item.status || 'Available',
     location: item.location || '',
     // Handle both field names for athlete assignments
-    assignedTo: item.athleteId || item.assignedTo || null,
+    assignedTo: item.assignedTo || item.athleteId || null,
     assignedToName: item.athleteName || '',
-    athleteId: item.athleteId || item.assignedTo || null,
+    athleteId: item.assignedTo || item.athleteId || null,
     athleteName: item.athleteName || '',
     notes: item.notes || '',
     lastUpdated: item.lastUpdated ? new Date(item.lastUpdated) : item.updatedAt ? new Date(item.updatedAt) : new Date(),
