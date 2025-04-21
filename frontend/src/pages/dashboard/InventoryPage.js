@@ -81,6 +81,12 @@ export default function InventoryPage() {
   const [athletesLoading, setAthletesLoading] = useState(true);
   const [athletesError, setAthletesError] = useState(null);
   
+  // State for the DataGrid pagination
+  const [paginationModel, setPaginationModel] = useState({
+    pageSize: 10,
+    page: 0,
+  });
+  
   // New item form state
   const [itemData, setItemData] = useState({
     name: '',
@@ -96,10 +102,6 @@ export default function InventoryPage() {
     athleteId: null,
     athleteName: ''
   });
-  
-  // State for the DataGrid
-  const [pageSize, setPageSize] = useState(10);
-  const [selectionModel, setSelectionModel] = useState([]);
   
   // State for snackbar
   const [snackbar, setSnackbar] = useState({
@@ -568,13 +570,26 @@ export default function InventoryPage() {
       field: 'name', 
       headerName: 'Item Name', 
       flex: 1,
+      minWidth: 180,
       renderCell: (params) => {
         if (!params || !params.row) return 'Unknown Item';
         const name = params.row.name || params.row.itemId || 'Unnamed Item';
         // Add tooltip for longer names
         return (
           <Tooltip title={name} placement="top">
-            <Typography noWrap>{name}</Typography>
+            <Typography 
+              sx={{ 
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                lineHeight: '1.2em',
+                maxHeight: '2.4em'
+              }}
+            >
+              {name}
+            </Typography>
           </Tooltip>
         );
       }
@@ -608,23 +623,32 @@ export default function InventoryPage() {
       field: 'assignedTo',
       headerName: 'Assigned To',
       flex: 1,
+      minWidth: 150,
       renderCell: (params) => {
         // If we have an assignedTo ID, look up the athlete in our athletes array
         if (params.value) {
           const athlete = athletes.find(a => a.id === params.value);
           if (athlete) {
-            return <Chip 
-              label={`${athlete.firstName} ${athlete.lastName}`} 
-              color="primary" 
-              size="small" 
-            />;
+            return (
+              <Box sx={{ py: 0.5 }}>
+                <Chip 
+                  label={`${athlete.firstName} ${athlete.lastName}`} 
+                  color="primary" 
+                  size="small" 
+                />
+              </Box>
+            );
           } else {
             // If we can't find the athlete in our list, show the ID in a neutral color
-            return <Chip 
-              label={`ID: ${params.value.substring(0, 6)}...`} 
-              color="default" 
-              size="small" 
-            />;
+            return (
+              <Box sx={{ py: 0.5 }}>
+                <Chip 
+                  label={`ID: ${params.value.substring(0, 6)}...`} 
+                  color="default" 
+                  size="small" 
+                />
+              </Box>
+            );
           }
         }
         return 'Not Assigned';
@@ -715,26 +739,21 @@ export default function InventoryPage() {
               </Button>
             </Box>
             
-            <Box sx={{ height: 500, mx: 3, mb: 3 }} ref={gridRef}>
+            <Box sx={{ mx: 3, mb: 3 }} ref={gridRef}>
               {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
                   <CircularProgress />
                 </Box>
               ) : error ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
                   <Alert severity="error">{error}</Alert>
                 </Box>
               ) : (
                 <DataGrid
                   rows={items || []}
                   columns={columns}
-                  initialState={{
-                    pagination: {
-                      paginationModel: {
-                        pageSize: 10,
-                      },
-                    },
-                  }}
+                  paginationModel={paginationModel}
+                  onPaginationModelChange={setPaginationModel}
                   pageSizeOptions={[5, 10, 25, 50]}
                   slots={{
                     toolbar: GridToolbar,
@@ -751,6 +770,9 @@ export default function InventoryPage() {
                   }}
                   density="standard"
                   autoHeight
+                  getEstimatedRowHeight={() => 52}
+                  getRowHeight={() => 'auto'}
+                  disableRowSelectionOnClick
                   getRowId={(row) => {
                     if (!row) return Math.random().toString(36).substring(2, 11);
                     return row.id || Math.random().toString(36).substring(2, 11);
@@ -758,6 +780,14 @@ export default function InventoryPage() {
                   sx={{
                     '& .MuiDataGrid-cell:hover': {
                       backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    },
+                    '& .MuiDataGrid-cell': {
+                      padding: '16px 8px',
+                      whiteSpace: 'normal !important',
+                      wordWrap: 'break-word !important'
+                    },
+                    '& .MuiDataGrid-row': {
+                      minHeight: '52px !important'
                     }
                   }}
                   onError={(params) => {
