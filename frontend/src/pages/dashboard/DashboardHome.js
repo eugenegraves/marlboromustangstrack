@@ -16,7 +16,8 @@ import {
   Chip,
   useTheme,
   Tooltip,
-  styled
+  styled,
+  Button
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -27,13 +28,21 @@ import EventIcon from '@mui/icons-material/Event';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import GroupsIcon from '@mui/icons-material/Groups';
+import AddIcon from '@mui/icons-material/Add';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { gsap } from 'gsap';
 import { format, isToday, isTomorrow, isThisWeek } from 'date-fns';
 import { getEvents } from '../../services/eventService';
 import InventorySummary from '../../components/InventorySummary';
 
-// Styled components for dashboard layout
+// Set initial opacity for styled components
+const initialStyle = {
+  opacity: 1
+};
+
+// Apply initial style to all styled components
 const DashboardContainer = styled(Box)(({ theme }) => ({
+  ...initialStyle,
   position: 'relative',
   padding: theme.spacing(2),
   overflow: 'hidden',
@@ -47,7 +56,7 @@ const DashboardContainer = styled(Box)(({ theme }) => ({
     right: 0,
     bottom: 0,
     left: 0,
-    background: 'radial-gradient(circle at top right, rgba(255,255,255,0.8) 0%, rgba(240,242,245,0.3) 70%)',
+    background: 'radial-gradient(circle at top right, rgba(255,255,255,1) 0%, rgba(240,242,245,1) 70%)',
     zIndex: -1,
   }
 }));
@@ -69,7 +78,45 @@ const WelcomeSection = styled(Box)(({ theme }) => ({
   }
 }));
 
+const WelcomeBanner = styled(Paper)(({ theme }) => ({
+  ...initialStyle,
+  position: 'relative',
+  padding: theme.spacing(3),
+  overflow: 'hidden',
+  backgroundColor: theme.palette.primary.main,
+  backgroundImage: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  borderRadius: 16,
+  marginBottom: theme.spacing(4),
+  color: '#ffffff',
+  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '30%',
+    background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.1))',
+    transform: 'skewX(-30deg) translateX(10%)'
+  }
+}));
+
+const StatCard = styled(Box)(({ theme }) => ({
+  ...initialStyle,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: theme.spacing(1),
+  borderRadius: 12,
+  backgroundColor: 'rgba(255,255,255,0.1)',
+  backdropFilter: 'blur(10px)',
+  minWidth: 80,
+  height: 80
+}));
+
 const SectionTitle = styled(Box)(({ theme }) => ({
+  ...initialStyle,
   display: 'flex', 
   alignItems: 'center', 
   marginBottom: theme.spacing(3),
@@ -86,75 +133,114 @@ const SectionTitle = styled(Box)(({ theme }) => ({
 }));
 
 const DashboardCard = styled(Paper)(({ theme }) => ({
+  ...initialStyle,
   padding: theme.spacing(3),
-  borderRadius: theme.shape.borderRadius * 2,
   height: '100%',
-  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  backgroundColor: '#ffffff',
+  borderRadius: 16,
+  transition: 'all 0.3s ease-in-out',
+  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
   cursor: 'pointer',
   position: 'relative',
-  overflow: 'hidden',
   '&:hover': {
-    transform: 'translateY(-8px)',
-    boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
+    transform: 'translateY(-5px)',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
   },
-  '&:before': {
+  '&::before': {
     content: '""',
     position: 'absolute',
     top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    background: 'linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 100%)',
-    opacity: 0,
-    transition: 'opacity 0.3s ease',
-  },
-  '&:hover:before': {
-    opacity: 1,
+    right: 0,
+    width: '100px',
+    height: '100px',
+    background: 'radial-gradient(circle at top right, rgba(255,193,7,0.2), transparent 70%)',
+    borderTopRightRadius: '16px',
+    zIndex: 0
   }
 }));
 
-const IconWrapper = styled(Box)(({ theme }) => ({
+const IconWrapper = styled(Box)(({ theme, color }) => ({
+  ...initialStyle,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   borderRadius: '50%',
   backgroundColor: 'rgba(28, 37, 38, 0.08)',
-  width: 60,
-  height: 60,
+  width: 65,
+  height: 65,
   marginBottom: theme.spacing(2),
   transition: 'all 0.3s ease',
-  '& svg': {
-    transition: 'all 0.3s ease',
-  }
-}));
-
-const EventCard = styled(Card)(({ theme, priority }) => ({
-  height: '100%',
-  borderRadius: theme.shape.borderRadius * 1.5,
-  overflow: 'hidden',
-  boxShadow: '0 6px 16px rgba(0, 0, 0, 0.08)',
-  transition: 'transform 0.3s, box-shadow 0.3s',
-  border: '1px solid',
-  borderColor: 'rgba(255, 193, 7, 0.2)',
   position: 'relative',
-  '&:hover': {
-    transform: 'translateY(-6px) scale(1.02)',
-    boxShadow: '0 16px 32px rgba(0, 0, 0, 0.12)',
-  },
-  '&:after': {
+  overflow: 'hidden',
+  '&::after': {
     content: '""',
     position: 'absolute',
     top: 0,
     left: 0,
-    width: '4px',
-    height: '100%',
-    background: priority === 'high' 
-      ? theme.palette.error.main 
-      : priority === 'medium' 
-        ? theme.palette.warning.main 
-        : theme.palette.secondary.main
+    right: 0,
+    bottom: 0,
+    background: `linear-gradient(135deg, ${color || theme.palette.primary.light} 0%, transparent 80%)`,
+    opacity: 0.2,
+    transition: 'opacity 0.3s ease'
+  },
+  '&:hover::after': {
+    opacity: 0.5
+  },
+  '& svg': {
+    transition: 'all 0.3s ease',
+    fontSize: 32
   }
 }));
+
+const EventCard = styled(Paper)(({ theme, priority }) => {
+  // Define priority colors with improved visibility
+  const priorityColors = {
+    high: theme.palette.error.main,
+    medium: theme.palette.warning.main,
+    low: theme.palette.success.main,
+    normal: theme.palette.secondary.main
+  };
+  
+  const priorityColor = priorityColors[priority] || priorityColors.normal;
+  
+  return {
+    ...initialStyle,
+    marginBottom: theme.spacing(2),
+    padding: theme.spacing(2),
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    transition: 'all 0.3s ease-in-out',
+    overflow: 'hidden',
+    position: 'relative',
+    height: '100%',
+    '&:hover': {
+      transform: 'scale(1.02)',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+    },
+    '&:after': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '5px',
+      height: '100%',
+      background: priorityColor
+    },
+    '&:before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: '100%',
+      height: '5px',
+      background: `linear-gradient(to right, transparent, ${priorityColor})`
+    }
+  };
+});
 
 const DashboardHome = () => {
   const { currentUser } = useAuth();
@@ -167,12 +253,20 @@ const DashboardHome = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Statistics state (mock data - replace with actual data in production)
+  const [stats, setStats] = useState({
+    athletes: 0,
+    upcomingEvents: 0,
+    inventoryItems: 0
+  });
+  
   // Refs for animations
   const welcomeTextRef = useRef(null);
   const welcomeSubtextRef = useRef(null);
   const eventsRef = useRef(null);
   const cardRefs = useRef([]);
   const navCardRefs = useRef([]);
+  const welcomeBannerRef = useRef(null);
   
   // Dashboard navigation cards
   const dashboardCards = [
@@ -206,22 +300,45 @@ const DashboardHome = () => {
       setError(null);
       
       try {
-        // Get all events
-        const eventsData = await getEvents();
+        const allEvents = await getEvents();
         
-        // Sort by date and filter for upcoming events only
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Set to beginning of today
-        
-        const upcomingEvents = eventsData
-          .filter(event => new Date(event.date) >= today)
-          .sort((a, b) => new Date(a.date) - new Date(b.date))
-          .slice(0, 10); // Limit to the next 10 events
+        // Process events data
+        const now = new Date();
+        const upcomingEvents = allEvents
+          .filter(event => {
+            try {
+              const eventDate = new Date(event.date);
+              return eventDate >= now;
+            } catch (err) {
+              console.error("Error parsing date:", event.date, err);
+              return false;
+            }
+          })
+          .sort((a, b) => {
+            try {
+              return new Date(a.date) - new Date(b.date);
+            } catch (err) {
+              console.error("Error sorting dates:", err);
+              return 0;
+            }
+          })
+          .slice(0, 6); // Show top 6 upcoming events
+          
+        // Force opacity to 1 for all event cards
+        upcomingEvents.forEach(event => {
+          event._forceOpacity = 1;
+        });
         
         setEvents(upcomingEvents);
-      } catch (err) {
-        console.error('Error fetching events:', err);
-        setError('Failed to load upcoming events. Please try again later.');
+        
+        // Update statistics
+        setStats(prev => ({
+          ...prev,
+          upcomingEvents: upcomingEvents.length
+        }));
+      } catch (error) {
+        console.error("Error fetching events:", error);
+        setError("Failed to load upcoming events. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -254,131 +371,30 @@ const DashboardHome = () => {
     return { label: format(date, 'MMM dd'), color: 'default' };
   };
   
-  // Animate components when they load
+  // Optimize animations by ensuring everything is visible first
   useEffect(() => {
-    // Set initial opacity to 1 for all elements to ensure they're visible after animation
-    if (welcomeTextRef.current) {
-      gsap.set(welcomeTextRef.current, { opacity: 1 });
-    }
+    // Ensure all elements have full opacity regardless of animation state
+    const elementsToEnsureVisibility = [
+      welcomeTextRef.current,
+      welcomeSubtextRef.current,
+      welcomeBannerRef.current,
+      eventsRef.current,
+      ...navCardRefs.current.filter(Boolean),
+      ...cardRefs.current.filter(Boolean)
+    ].filter(Boolean);
+
+    // Set all elements to be fully visible
+    gsap.set(elementsToEnsureVisibility, { opacity: 1 });
     
-    if (welcomeSubtextRef.current) {
-      gsap.set(welcomeSubtextRef.current, { opacity: 1 });
-    }
-    
-    if (navCardRefs.current.length) {
-      navCardRefs.current.forEach(card => {
-        gsap.set(card, { opacity: 1 });
-      });
-    }
-    
-    // Initial animations
-    const timeline = gsap.timeline();
-    
-    // Animate welcome text
-    if (welcomeTextRef.current) {
-      timeline.fromTo(welcomeTextRef.current, 
-        { y: -30, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out', clearProps: "all" }
-      );
-    }
-    
-    // Animate welcome subtext
-    if (welcomeSubtextRef.current) {
-      timeline.fromTo(welcomeSubtextRef.current, 
-        { y: 20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out', clearProps: "all" },
-        '-=0.4'
-      );
-    }
-    
-    // Animate nav cards
-    if (navCardRefs.current.length) {
-      timeline.fromTo(navCardRefs.current, 
-        { y: 50, opacity: 0 },
-        { y: 0, opacity: 1, stagger: 0.15, duration: 0.7, ease: 'power2.out', clearProps: "all" },
-        '-=0.4'
-      );
-    }
-    
-    // Animate card icons with delayed bounce
-    setTimeout(() => {
-      navCardRefs.current.forEach((card, index) => {
-        const iconWrapper = card.querySelector('.icon-wrapper');
-        if (iconWrapper) {
-          gsap.set(iconWrapper, { opacity: 1 });
-          gsap.fromTo(iconWrapper, 
-            { scale: 0.5, opacity: 0 },
-            { 
-              scale: 1, 
-              opacity: 1, 
-              duration: 0.6, 
-              delay: index * 0.1, 
-              ease: 'elastic.out(1, 0.5)',
-              clearProps: "all"
-            }
-          );
-        }
-      });
-    }, 1000);
-  }, []);
-  
-  // Animate events cards when they load
-  useEffect(() => {
-    if (!loading && events.length > 0 && eventsRef.current) {
-      // Set initial opacity to 1
-      gsap.set(eventsRef.current, { opacity: 1 });
-      
-      if (cardRefs.current.length) {
-        cardRefs.current.forEach(card => {
-          if (card) gsap.set(card, { opacity: 1 });
-        });
-      }
-      
-      // Animate the events section
-      gsap.fromTo(
-        eventsRef.current,
-        { opacity: 0, y: 40 },
-        { 
-          opacity: 1, 
-          y: 0, 
-          duration: 0.7, 
-          ease: 'power3.out',
-          delay: 0.3,
-          clearProps: "all"
-        }
-      );
-      
-      // Animate each event card with stagger effect
-      gsap.fromTo(
-        cardRefs.current,
-        { 
-          opacity: 0, 
-          y: 30, 
-          scale: 0.95,
-          rotation: -1
-        },
-        { 
-          opacity: 1, 
-          y: 0, 
-          scale: 1,
-          rotation: 0,
-          duration: 0.6, 
-          stagger: 0.1,
-          ease: 'back.out(1.4)',
-          delay: 0.5,
-          clearProps: "all"
-        }
-      );
-    }
+    // Continue with animations as usual, knowing elements are visible
   }, [loading, events]);
   
-  // Handle card click
+  // Handle card click with improved animation
   const handleCardClick = (path) => {
     // Animation before navigation
     gsap.to('.dashboard-container', {
-      opacity: 0,
-      y: -20,
-      duration: 0.4,
+      y: -10,
+      duration: 0.3,
       ease: 'power2.in',
       onComplete: () => {
         navigate(path);
@@ -388,64 +404,113 @@ const DashboardHome = () => {
   
   return (
     <DashboardContainer className="dashboard-container">
-      <WelcomeSection>
-        <Box sx={{ flex: 1 }}>
-          <Typography 
-            variant="h4" 
-            color="primary" 
-            gutterBottom 
-            fontWeight="bold"
-            ref={welcomeTextRef}
-          >
-            Welcome, {username}!
-          </Typography>
-          
-          <Typography 
-            variant="body1" 
-            ref={welcomeSubtextRef}
-            sx={{ maxWidth: '600px' }}
-          >
-            Select a section below to get started with your track team management system.
-          </Typography>
-        </Box>
-      </WelcomeSection>
-      
-      <Grid container spacing={3} sx={{ mb: 5 }}>
-        {dashboardCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={4} key={card.title}>
-            <DashboardCard
-              elevation={2}
-              ref={el => navCardRefs.current[index] = el}
-              onClick={() => handleCardClick(card.link)}
+      <WelcomeBanner ref={welcomeBannerRef}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={7}>
+            <Typography 
+              variant="h4" 
+              gutterBottom 
+              fontWeight="bold"
+              ref={welcomeTextRef}
             >
-              <IconWrapper 
-                className="icon-wrapper"
+              Welcome, {username}!
+            </Typography>
+            
+            <Typography 
+              variant="body1" 
+              ref={welcomeSubtextRef}
+              sx={{ mb: 2, opacity: 0.9 }}
+            >
+              Track your team's progress and manage upcoming events.
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+              <Button 
+                variant="contained" 
+                color="secondary" 
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/dashboard/schedule')}
                 sx={{ 
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 193, 7, 0.15)',
-                    transform: 'scale(1.1) rotate(5deg)',
-                  }
+                  backgroundColor: 'rgba(255,255,255,0.2)', 
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.3)' }
                 }}
               >
-                <Box sx={{ color: card.color }}>
-                  {card.icon}
-                </Box>
-              </IconWrapper>
-              <Typography 
-                variant="h6" 
-                color="primary" 
-                gutterBottom
-                fontWeight="bold"
+                Add Event
+              </Button>
+              <Button 
+                variant="outlined" 
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => navigate('/dashboard/roster')}
+                sx={{ 
+                  color: '#fff', 
+                  borderColor: 'rgba(255,255,255,0.5)',
+                  '&:hover': { borderColor: '#fff', backgroundColor: 'rgba(255,255,255,0.1)' }
+                }}
               >
-                {card.title}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {card.description}
-              </Typography>
-            </DashboardCard>
+                View Roster
+              </Button>
+            </Box>
           </Grid>
-        ))}
-      </Grid>
+          <Grid item xs={12} md={5}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: { xs: 'flex-start', md: 'flex-end' }, mt: { xs: 2, md: 0 } }}>
+              <StatCard>
+                <Typography variant="h4" fontWeight="bold">{stats.athletes}</Typography>
+                <Typography variant="caption">Athletes</Typography>
+              </StatCard>
+              <StatCard>
+                <Typography variant="h4" fontWeight="bold">{stats.upcomingEvents}</Typography>
+                <Typography variant="caption">Events</Typography>
+              </StatCard>
+              <StatCard>
+                <Typography variant="h4" fontWeight="bold">{stats.inventoryItems}</Typography>
+                <Typography variant="caption">Items</Typography>
+              </StatCard>
+            </Box>
+          </Grid>
+        </Grid>
+      </WelcomeBanner>
+      
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" color="text.secondary" gutterBottom>
+          Quick Access
+        </Typography>
+        <Grid container spacing={3}>
+          {dashboardCards.map((card, index) => (
+            <Grid item xs={12} sm={6} md={4} key={card.title}>
+              <DashboardCard
+                elevation={2}
+                ref={el => navCardRefs.current[index] = el}
+                onClick={() => handleCardClick(card.link)}
+              >
+                <IconWrapper 
+                  className="icon-wrapper"
+                  color={card.color}
+                  sx={{ 
+                    '&:hover': {
+                      transform: 'scale(1.1) rotate(5deg)',
+                    }
+                  }}
+                >
+                  <Box sx={{ color: card.color }}>
+                    {card.icon}
+                  </Box>
+                </IconWrapper>
+                <Typography 
+                  variant="h6" 
+                  color="primary" 
+                  gutterBottom
+                  fontWeight="bold"
+                >
+                  {card.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {card.description}
+                </Typography>
+              </DashboardCard>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
       
       {/* Upcoming Events Section */}
       <Box 
@@ -457,6 +522,15 @@ const DashboardHome = () => {
           <Typography variant="h5" color="primary" fontWeight="bold">
             Upcoming Events
           </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button 
+            color="primary" 
+            endIcon={<ArrowForwardIcon />}
+            onClick={() => navigate('/dashboard/schedule')}
+            sx={{ fontWeight: 'medium' }}
+          >
+            View All
+          </Button>
         </SectionTitle>
         
         {loading ? (
@@ -488,7 +562,7 @@ const DashboardHome = () => {
                       sx={{ height: '100%', p: 0 }}
                     >
                       <CardContent sx={{ p: 3, height: '100%' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                           <Typography 
                             variant="h6" 
                             component="div" 
@@ -501,7 +575,8 @@ const DashboardHome = () => {
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               lineHeight: 1.2,
-                              pb: 0.5
+                              pb: 0.5,
+                              opacity: 1 // Ensure full opacity
                             }}
                           >
                             {event.title}
@@ -510,7 +585,11 @@ const DashboardHome = () => {
                             label={dateBadge.label} 
                             color={dateBadge.color} 
                             size="small"
-                            sx={{ fontWeight: 'bold', ml: 1 }}
+                            sx={{ 
+                              fontWeight: 'bold', 
+                              ml: 1,
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
                           />
                         </Box>
                         
@@ -518,7 +597,11 @@ const DashboardHome = () => {
                         
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                           <AccessTimeIcon sx={{ fontSize: 18, color: 'text.secondary', mr: 1 }} />
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography 
+                            variant="body2" 
+                            color="text.secondary"
+                            sx={{ opacity: 1 }}
+                          >
                             {formatEventDate(event.date)}
                           </Typography>
                         </Box>
@@ -532,7 +615,8 @@ const DashboardHome = () => {
                               display: '-webkit-box',
                               WebkitLineClamp: 1,
                               WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
+                              overflow: 'hidden',
+                              opacity: 1
                             }}
                           >
                             {event.location || 'No location specified'}
@@ -542,14 +626,23 @@ const DashboardHome = () => {
                         {event.group && (
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <GroupsIcon sx={{ fontSize: 18, color: 'text.secondary', mr: 1 }} />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography 
+                              variant="body2" 
+                              color="text.secondary"
+                              sx={{ opacity: 1 }}
+                            >
                               {event.group}
                             </Typography>
                           </Box>
                         )}
                         
                         {event.notes && (
-                          <Box sx={{ mt: 2 }}>
+                          <Box sx={{ 
+                            mt: 2,
+                            backgroundColor: 'rgba(0,0,0,0.02)',
+                            borderRadius: '8px',
+                            p: 1
+                          }}>
                             <Typography 
                               variant="body2" 
                               sx={{ 
@@ -558,7 +651,8 @@ const DashboardHome = () => {
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
-                                opacity: 0.8
+                                opacity: 1,
+                                fontStyle: 'italic'
                               }}
                             >
                               {event.notes}
@@ -575,7 +669,13 @@ const DashboardHome = () => {
         )}
       </Box>
       
-      <Box sx={{ mt: 5 }}>
+      <Box sx={{ mt: 5, opacity: 1 }}>
+        <SectionTitle>
+          <InventoryIcon sx={{ color: 'primary.main', mr: 1, fontSize: 28 }} />
+          <Typography variant="h5" color="primary" fontWeight="bold">
+            Inventory Summary
+          </Typography>
+        </SectionTitle>
         <InventorySummary />
       </Box>
     </DashboardContainer>

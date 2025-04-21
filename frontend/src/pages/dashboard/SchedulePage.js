@@ -105,6 +105,7 @@ const SchedulePage = () => {
   // References for animations
   const calendarRef = useRef(null);
   const dialogRef = useRef(null);
+  const gridRef = useRef(null);
   
   // Animate calendar when it loads
   const animateCalendar = () => {
@@ -359,6 +360,78 @@ const SchedulePage = () => {
     setOpen(true);
   };
   
+  // Handle DataGrid resizing issues in production
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (calendarRef.current) {
+        const calendar = calendarRef.current.querySelector('.fc');
+        if (calendar) {
+          // Give the calendar a moment to render, then dispatch a resize event
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+          }, 100);
+          
+          // Fix specific fullcalendar elements
+          const viewHarness = calendar.querySelector('.fc-view-harness');
+          if (viewHarness) {
+            viewHarness.style.height = 'auto';
+          }
+          
+          // Fix month view specifically
+          const monthView = calendar.querySelector('.fc-dayGridMonth-view');
+          if (monthView) {
+            // Set specific styles for month view
+            monthView.style.height = 'auto';
+            
+            // Fix daygrid body sizing
+            const daygridBody = monthView.querySelector('.fc-daygrid-body');
+            if (daygridBody) {
+              daygridBody.style.width = '100%';
+              daygridBody.style.height = 'auto';
+              
+              // Ensure the table fills the container
+              const table = daygridBody.querySelector('table');
+              if (table) {
+                table.style.width = '100%';
+                table.style.height = 'auto';
+              }
+            }
+          }
+        }
+      }
+      
+      // Dispatch a resize event after a delay
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 200);
+    };
+    
+    // Initial call
+    handleWindowResize();
+    
+    // Call again after a short delay to ensure everything has rendered
+    const timeoutId = setTimeout(handleWindowResize, 500);
+    
+    // Also call when switching views
+    document.querySelectorAll('.fc-button').forEach(button => {
+      button.addEventListener('click', () => {
+        setTimeout(handleWindowResize, 100);
+      });
+    });
+    
+    // Set up event listener
+    window.addEventListener('resize', handleWindowResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      clearTimeout(timeoutId);
+      document.querySelectorAll('.fc-button').forEach(button => {
+        button.removeEventListener('click', handleWindowResize);
+      });
+    };
+  }, [events, loading]); // Re-apply when events change or loading state changes
+  
   return (
     <Box sx={{ height: '100%', position: 'relative' }}>
       {/* 3D Track visualization - shown conditionally */}
@@ -406,7 +479,7 @@ const SchedulePage = () => {
           component={Card} 
           sx={{ 
             p: 3, 
-            height: 'calc(100vh - 200px)',
+            height: { xs: 600, sm: 650, md: 'calc(100vh - 200px)' },
             minHeight: 600,
             backgroundColor: 'white',
             position: 'relative'
@@ -457,6 +530,38 @@ const SchedulePage = () => {
                   mb: 3,
                   flexWrap: 'wrap',
                   gap: 1,
+                },
+                // Fix for month view
+                '& .fc-view-harness': {
+                  minHeight: '400px',
+                  height: 'auto !important'
+                },
+                '& .fc-scrollgrid': {
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                },
+                '& .fc-daygrid-day': {
+                  minHeight: '80px'
+                },
+                // Make month cells expand properly
+                '& .fc-daygrid-body': {
+                  width: '100% !important'
+                },
+                '& .fc-scroller': {
+                  overflow: 'visible !important',
+                  height: 'auto !important'
+                },
+                // Ensure table fills available space
+                '& table': {
+                  width: '100% !important'
+                },
+                // Handle dayGridMonth view specifically
+                '& .fc-dayGridMonth-view': {
+                  height: 'auto !important',
+                  '& .fc-daygrid-body': {
+                    width: '100% !important',
+                    height: 'auto !important'
+                  }
                 }
               }}
             >
@@ -471,7 +576,9 @@ const SchedulePage = () => {
                 events={events}
                 eventClick={handleEventClick}
                 dateClick={handleDateClick}
-                height="100%"
+                height="auto"
+                expandRows={true}
+                stickyHeaderDates={true}
                 eventTimeFormat={{
                   hour: 'numeric',
                   minute: '2-digit',

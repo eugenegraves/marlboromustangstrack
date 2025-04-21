@@ -15,7 +15,7 @@ const DashboardLayout = () => {
   };
   
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%', overflow: 'hidden' }}>
       {/* Three.js Track Background */}
       <TrackBackground />
       
@@ -35,7 +35,9 @@ const DashboardLayout = () => {
           ml: { md: `${drawerWidth}px` },
           backgroundColor: '#f5f5f5',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          minWidth: 0, // Important fix for flexbox containers to prevent overflow
+          maxWidth: '100%' // Ensure content doesn't exceed the viewport
         }}
       >
         <Toolbar /> {/* Adds spacing below fixed app bar */}
@@ -50,6 +52,8 @@ const DashboardLayout = () => {
             position: 'relative',
             overflow: 'hidden',
             border: '1px solid rgba(0, 0, 0, 0.05)',
+            minWidth: 0, // Important fix for flexbox content
+            width: '100%',
             // Track-inspired border - yellow dashed line
             '&::after': {
               content: '""',
@@ -84,6 +88,24 @@ const DashboardLayout = () => {
           &copy; {new Date().getFullYear()} Mustangs Track Team • All Rights Reserved
         </Box>
       </Box>
+      
+      {/* Global styles to fix horizontal overflow */}
+      <style jsx global>{`
+        body {
+          overflow-x: hidden;
+        }
+        .MuiBox-root, .MuiPaper-root, .MuiContainer-root {
+          max-width: 100%;
+        }
+        .MuiDataGrid-root {
+          width: 100% !important;
+          overflow: visible !important;
+        }
+        .MuiDataGrid-main {
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+      `}</style>
     </Box>
   );
 };

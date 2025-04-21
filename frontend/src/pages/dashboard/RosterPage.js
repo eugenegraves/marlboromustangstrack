@@ -560,6 +560,68 @@ const RosterPage = () => {
     return eventDate < today;
   };
   
+  // Handle DataGrid resizing issues in production
+  useEffect(() => {
+    const handleWindowResize = () => {
+      // Force re-render of DataGrid on window resize
+      if (tableRef.current) {
+        const gridElement = tableRef.current.querySelector('.MuiDataGrid-root');
+        if (gridElement) {
+          // Apply height explicitly to ensure proper rendering
+          gridElement.style.height = 'auto';
+          gridElement.style.minHeight = '400px';
+          
+          // Fix width issues in production build
+          gridElement.style.width = '100%';
+          gridElement.style.minWidth = '0';
+          
+          // Fix parent container issues
+          const parentContainer = tableRef.current;
+          if (parentContainer) {
+            parentContainer.style.minWidth = '0';
+            parentContainer.style.width = '100%';
+            parentContainer.style.maxWidth = '100%';
+            parentContainer.style.overflow = 'hidden';
+          }
+          
+          // Apply fixes to the inner virtual scroller
+          const virtualScroller = gridElement.querySelector('.MuiDataGrid-virtualScroller');
+          if (virtualScroller) {
+            virtualScroller.style.width = '100%';
+            virtualScroller.style.minWidth = '0';
+          }
+          
+          // Fix column headers
+          const columnHeaders = gridElement.querySelector('.MuiDataGrid-columnHeaders');
+          if (columnHeaders) {
+            columnHeaders.style.width = '100%';
+            columnHeaders.style.minWidth = '0';
+          }
+        }
+      }
+      
+      // Dispatch a resize event after a short delay to ensure DataGrid recalculates dimensions
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+    };
+    
+    // Initial call
+    handleWindowResize();
+    
+    // Call again after a short delay to ensure everything has rendered
+    const timeoutId = setTimeout(handleWindowResize, 500);
+    
+    // Set up event listener
+    window.addEventListener('resize', handleWindowResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      clearTimeout(timeoutId);
+    };
+  }, [athletes, loading]); // Re-apply when athletes change or loading state changes
+  
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
